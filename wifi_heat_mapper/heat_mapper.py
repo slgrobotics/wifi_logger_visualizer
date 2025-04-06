@@ -1,7 +1,7 @@
 # AI generated: 
 # Below is an example of Python code using the matplotlib and seaborn libraries to generate a heatmap
 #
-# not to be confused with Heatmapper Node, 
+# not to be confused with Heatmapper Node, ../wifi_logger_visualizer/heat_mapper_node.py
 #
 # Prerequisites:
 #     sudo apt install python3-scipy python3-seaborn wireless-tools sqlite3
