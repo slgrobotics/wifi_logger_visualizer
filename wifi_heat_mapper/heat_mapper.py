@@ -1,7 +1,14 @@
 # AI generated: 
 # Below is an example of Python code using the matplotlib and seaborn libraries to generate a heatmap
 #
-# sudo apt install python3-seaborn
+# not to be confused with Heatmapper Node, 
+#
+# Prerequisites:
+#     sudo apt install python3-scipy python3-seaborn wireless-tools sqlite3
+#
+# Run it:
+#     cd ~/robot_ws/src/wifi_logger_visualizer/wifi_heat_mapper
+#     python3 heat_mapper.py
 #
 
 import matplotlib.pyplot as plt
@@ -10,7 +17,7 @@ import numpy as np
 import math
 import sqlite3
 
-db_path = '/home/sergei/wifi_ws/src/wifi_strength_logger/database/wifi_data.db'
+db_path = '../database/wifi_data.db'
 
 scale_factor = 1 # map scale, larger value causes finer grid
 
