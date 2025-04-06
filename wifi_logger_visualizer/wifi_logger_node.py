@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import os
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
+from example_interfaces.msg import Float32MultiArray
 from tf2_ros import TransformListener, LookupException, ConnectivityException, ExtrapolationException
 from tf2_ros.buffer import Buffer
 from tf2_geometry_msgs import do_transform_pose
@@ -32,6 +33,7 @@ class WifiDataCollector(Node):
         self.declare_parameter('update_interval', 1.0)
         self.declare_parameter('max_signal_strength', -30.0)  # dBm
         self.declare_parameter('min_signal_strength', -90.0)  # dBm
+        self.declare_parameter('publish_metrics', True)
         
         # Get parameter values
         self.x = self.get_parameter('x').value
@@ -41,6 +43,7 @@ class WifiDataCollector(Node):
         self.update_interval = self.get_parameter('update_interval').value
         self.max_signal_strength = self.get_parameter('max_signal_strength').value
         self.min_signal_strength = self.get_parameter('min_signal_strength').value
+        self.do_publish_metrics = self.get_parameter('publish_metrics').value
 
         # Initialize WiFi interface
         if not self.wifi_interface:
@@ -66,10 +69,17 @@ class WifiDataCollector(Node):
         
         self.odom_subscriber = self.create_subscription(
             Odometry,
-            '/odom',
+            '/odometry/local',
             self.odom_callback,
             qos
         )
+
+        if self.do_publish_metrics:
+            self.publisher_ = self.create_publisher(
+                Float32MultiArray,
+                '/wifi_metrics',
+                10
+            )
 
         self.current_pose = None
         self.transform_available = False
@@ -246,6 +256,8 @@ class WifiDataCollector(Node):
         try:
             output = subprocess.check_output(["iwconfig", self.wifi_interface]).decode("utf-8")
 
+            #self.get_logger().info(output)
+
             # Extract bit rate
             bit_rate_match = re.search(r"Bit Rate[:=](?P<bit_rate>\d+\.?\d*) (Mb/s|Gb/s)", output)
             if bit_rate_match:
@@ -282,6 +294,19 @@ class WifiDataCollector(Node):
         except Exception as e:
             self.get_logger().error(f"Unexpected error getting WiFi data: {e}")
             return None, None, None
+
+    def publish_wifi_data(self, bit_rate, link_quality, signal_level):
+        try:
+            msg = Float32MultiArray()
+            # Populate the data array (a 3x1 array), leave layout empty:
+            data = [bit_rate, link_quality, signal_level]
+            msg.data = data
+
+            #self.get_logger().info(f"Publishing WiFi data: interface: {self.wifi_interface}  bit_rate: {bit_rate}  link_quality: {link_quality}  signal_level: {signal_level}")
+            self.publisher_.publish(msg)
+
+        except Exception as e:
+            self.get_logger().error(f"Unexpected error publishing WiFi data: {e}")
 
     def odom_callback(self, msg):
         try:
@@ -329,6 +354,8 @@ class WifiDataCollector(Node):
 
         self.x, self.y = self.current_pose
         bit_rate, link_quality, signal_level = self.get_wifi_data()
+
+        self.publish_wifi_data(bit_rate, link_quality, signal_level)
         
         if all(v is not None for v in [bit_rate, link_quality, signal_level]):
             self.insert_data(bit_rate, link_quality, signal_level)
