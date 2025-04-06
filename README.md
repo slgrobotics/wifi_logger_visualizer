@@ -119,9 +119,12 @@ ros2 launch wifi_logger_visualizer heat_mapper.launch.py standalone:=true
 -rw-r--r--  1 ros ros 102400 Apr  2 12:09 wifi_data.db
 ```
 Refer to [database](https://github.com/slgrobotics/wifi_logger_visualizer/tree/main/database) folder for viewing the data.
-You can use sample database from that folder to try _Heat Mapper_ in standalone mode:
-
-![Screenshot from 2025-04-05 20-20-20](https://github.com/user-attachments/assets/3183629f-dd19-4b62-a1db-9fd8cfb3f810)
+You can use sample database from that folder to try sample _Heat Mapper_ code:
+```
+cd ~/robot_ws/src/wifi_logger_visualizer/wifi_heat_mapper
+python3 heat_mapper.py
+```
+![Heatmapper-standalone](https://github.com/user-attachments/assets/06fd4b20-f948-4a30-972a-8091e697df0e)
 
 ### WiFi Logger Node
 
