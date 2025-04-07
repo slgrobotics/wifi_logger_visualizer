@@ -9,6 +9,7 @@ import os
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from example_interfaces.msg import Float32MultiArray
+from rviz_2d_overlay_msgs.msg import OverlayText
 from tf2_ros import TransformListener, LookupException, ConnectivityException, ExtrapolationException
 from tf2_ros.buffer import Buffer
 from tf2_geometry_msgs import do_transform_pose
@@ -34,6 +35,7 @@ class WifiDataCollector(Node):
         self.declare_parameter('max_signal_strength', -30.0)  # dBm
         self.declare_parameter('min_signal_strength', -90.0)  # dBm
         self.declare_parameter('publish_metrics', True)
+        self.declare_parameter('publish_overlay', True)
         
         # Get parameter values
         self.x = self.get_parameter('x').value
@@ -44,6 +46,7 @@ class WifiDataCollector(Node):
         self.max_signal_strength = self.get_parameter('max_signal_strength').value
         self.min_signal_strength = self.get_parameter('min_signal_strength').value
         self.do_publish_metrics = self.get_parameter('publish_metrics').value
+        self.do_publish_overlay = self.get_parameter('publish_overlay').value
 
         # Initialize WiFi interface
         if not self.wifi_interface:
@@ -75,9 +78,16 @@ class WifiDataCollector(Node):
         )
 
         if self.do_publish_metrics:
-            self.publisher_ = self.create_publisher(
+            self.metrics_publisher = self.create_publisher(
                 Float32MultiArray,
-                '/wifi_metrics',
+                '/wifi/metrics',
+                10
+            )
+
+        if self.do_publish_overlay:
+            self.overlay_publisher = self.create_publisher(
+                OverlayText,
+                '/wifi/overlay',
                 10
             )
 
@@ -254,12 +264,12 @@ class WifiDataCollector(Node):
     def get_wifi_data(self) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """Get WiFi data with improved error handling and validation."""
         try:
-            output = subprocess.check_output(["iwconfig", self.wifi_interface]).decode("utf-8")
+            self.iwconfig_output = subprocess.check_output(["iwconfig", self.wifi_interface]).decode("utf-8")
 
-            #self.get_logger().info(output)
+            #self.get_logger().info(self.iwconfig_output)
 
             # Extract bit rate
-            bit_rate_match = re.search(r"Bit Rate[:=](?P<bit_rate>\d+\.?\d*) (Mb/s|Gb/s)", output)
+            bit_rate_match = re.search(r"Bit Rate[:=](?P<bit_rate>\d+\.?\d*) (Mb/s|Gb/s)", self.iwconfig_output)
             if bit_rate_match:
                 bit_rate = float(bit_rate_match.group("bit_rate"))
                 if bit_rate_match.group(2) == "Gb/s":
@@ -268,7 +278,7 @@ class WifiDataCollector(Node):
                 bit_rate = None
 
             # Extract link quality
-            link_quality_match = re.search(r"Link Quality=(?P<link_quality>\d+/\d+)", output)
+            link_quality_match = re.search(r"Link Quality=(?P<link_quality>\d+/\d+)", self.iwconfig_output)
             if link_quality_match:
                 link_quality_str = link_quality_match.group("link_quality")
                 link_quality = float(link_quality_str.split('/')[0]) / float(link_quality_str.split('/')[1])
@@ -276,7 +286,7 @@ class WifiDataCollector(Node):
                 link_quality = None
 
             # Extract and validate signal level
-            signal_level_match = re.search(r"Signal level[:=](?P<signal_level>-?\d+) dBm", output)
+            signal_level_match = re.search(r"Signal level[:=](?P<signal_level>-?\d+) dBm", self.iwconfig_output)
             if signal_level_match:
                 signal_level = float(signal_level_match.group("signal_level"))
                 # Validate signal level is within expected range
@@ -303,10 +313,46 @@ class WifiDataCollector(Node):
             msg.data = data
 
             #self.get_logger().info(f"Publishing WiFi data: interface: {self.wifi_interface}  bit_rate: {bit_rate}  link_quality: {link_quality}  signal_level: {signal_level}")
-            self.publisher_.publish(msg)
+            self.metrics_publisher.publish(msg)
 
         except Exception as e:
             self.get_logger().error(f"Unexpected error publishing WiFi data: {e}")
+
+    def publish_wifi_overlay(self, bit_rate, link_quality, signal_level, iwconfig_output):
+        try:
+
+            self.get_logger().info(iwconfig_output)
+
+            msg = OverlayText() # https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins/blob/main/rviz_2d_overlay_msgs/msg/OverlayText.msg
+
+            msg.action = OverlayText.ADD
+            msg.text = "<pre>"
+            msg.text += iwconfig_output
+            msg.text += "</pre>"
+
+            msg.fg_color.r = 0.8
+            msg.fg_color.g = 0.8
+            msg.fg_color.b = 0.3
+            msg.fg_color.a = 0.8
+
+            msg.bg_color.r = 0.0
+            msg.bg_color.g = 0.0
+            msg.bg_color.b = 0.0
+            msg.bg_color.a = 0.0
+
+            msg.horizontal_distance = 10
+            msg.vertical_distance = 50
+            msg.width = 1200
+            msg.height = 200
+
+            msg.text_size = 12.0 # font size
+            msg.font = "DejaVu Sans Mono"
+
+            self.get_logger().info(f"Publishing WiFi overlay: interface: {self.wifi_interface}  {iwconfig_output}")
+            self.overlay_publisher.publish(msg)
+
+        except Exception as e:
+            self.get_logger().error(f"Unexpected error publishing WiFi overlay: {e}")
 
     def odom_callback(self, msg):
         try:
@@ -355,7 +401,11 @@ class WifiDataCollector(Node):
         self.x, self.y = self.current_pose
         bit_rate, link_quality, signal_level = self.get_wifi_data()
 
-        self.publish_wifi_data(bit_rate, link_quality, signal_level)
+        if self.do_publish_metrics:
+            self.publish_wifi_data(bit_rate, link_quality, signal_level)
+        
+        if self.do_publish_overlay:
+            self.publish_wifi_overlay(bit_rate, link_quality, signal_level, self.iwconfig_output)
         
         if all(v is not None for v in [bit_rate, link_quality, signal_level]):
             self.insert_data(bit_rate, link_quality, signal_level)
