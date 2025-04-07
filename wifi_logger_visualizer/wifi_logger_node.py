@@ -326,25 +326,31 @@ class WifiDataCollector(Node):
             msg = OverlayText() # https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins/blob/main/rviz_2d_overlay_msgs/msg/OverlayText.msg
 
             msg.action = OverlayText.ADD
+
             msg.text = "<pre>"
             msg.text += iwconfig_output
             msg.text += "</pre>"
 
+            # text color:
             msg.fg_color.r = 0.8
             msg.fg_color.g = 0.8
             msg.fg_color.b = 0.3
             msg.fg_color.a = 0.8
 
+            # overlay canvas color:
             msg.bg_color.r = 0.0
             msg.bg_color.g = 0.0
             msg.bg_color.b = 0.0
             msg.bg_color.a = 0.0
 
-            msg.horizontal_distance = 10
-            msg.vertical_distance = 50
-            msg.width = 1200
-            msg.height = 200
+            msg.horizontal_alignment = OverlayText.LEFT # one of LEFT, CENTER, RIGHT
+            msg.vertical_alignment = OverlayText.TOP # one of TOP, CENTER, BOTTOM
+            msg.horizontal_distance = 10 # int, pixels - Horizontal distance from left/right border or center, depending on alignment
+            msg.vertical_distance = 10 # int, pixels - Vertical distance between from top/bottom border or center, depending on alignment
+            msg.width = 1200 # int, pixels - Width of the overlay canvas
+            msg.height = 200 # int, pixels - Height of the overlay canvas
 
+            #msg.line_width = 25 # int, pixels - Lines height in the overlay - doesn't seem to affect anything
             msg.text_size = 12.0 # font size
             msg.font = "DejaVu Sans Mono"
 
