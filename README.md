@@ -149,6 +149,9 @@ The `/wifi/metrics` topic with *[bit_rate, link_quality, signal_level]* array ca
 
 The `/wifi/overlay` topic can be used by RViz2 to view complete information about the connection, using [rviz_2d_overlay_plugins package](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins).
 
+**Note:** the Logger's overlay may conflict with [Battery Display](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/Sensors/BatteryStateBroadcaster.md#displaying-battery-state-data-in-rviz2) - 
+they are both configured by default to reside in upper left corner of RViz2. Resolve this conflict by modifying *vertical_distance* value.
+
 ### WiFi Visualizer Node
 
 The visualizer node creates cost maps from the collected data:
