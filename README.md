@@ -70,7 +70,7 @@ This package provides three main nodes:
 
 2. Install dependencies:
    ```
-   sudo apt install python3-scipy python3-seaborn wireless-tools sqlite3
+   sudo apt install python3-scipy python3-seaborn wireless-tools sqlite3  ros-${ROS_DISTRO}-rviz-2d-overlay-plugins
 
    cd ~/robot_ws
    sudo rosdep init    # do it once, if you haven't done it before
@@ -140,8 +140,14 @@ Parameters:
 - `update_interval`: How often to collect data in seconds (default: 1.0)
 - `max_signal_strength`: Maximum expected signal strength in dBm (default: -30.0)
 - `min_signal_strength`: Minimum expected signal strength in dBm (default: -90.0)
+- `publish_metrics`: if True, logger will publish `/wifi/metrics` topic of type _Float32MultiArray_ (default: True)
+- `publish_overlay`: if True, logger will publish `/wifi/overlay` topic of type _OverlayText_ (default: True)
 
 Signal strength is expected to be in the range of -90 dBm (weak) to -30 dBm (strong). The logger will only collect data within this range.
+
+The `/wifi/metrics` topic with *[bit_rate, link_quality, signal_level]* array can be used, for example, for avoiding areas with weaker WiFi reception.
+
+The `/wifi/overlay` topic can be used by RViz2 to view complete information about the connection, using [rviz_2d_overlay_plugins package](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins).
 
 ### WiFi Visualizer Node
 
