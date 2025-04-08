@@ -58,6 +58,7 @@ This package provides three main nodes:
 - NumPy
 - Seaborn
 - SciPy
+- ROS2 [rviz_2d_overlay_plugins](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins) package
 
 ## Installation
 
