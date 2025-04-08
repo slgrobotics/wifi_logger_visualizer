@@ -66,7 +66,7 @@ This package provides three main nodes:
    ```
    mkdir -p ~/robot_ws/src
    cd ~/robot_ws/src
-   git clone https://github.com/slgrobotics/wifi_strength_logger.git
+   git clone https://github.com/slgrobotics/wifi_logger_visualizer.git
    ```
 
 2. Install dependencies:
