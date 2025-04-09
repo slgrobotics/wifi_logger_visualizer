@@ -4,6 +4,8 @@ https://github.com/wimblerobotics/wifi_logger_visualizer
 
 All credits go to Michael Wimble.
 
+Check out information about WiFi benchmarking, testing and setup [here](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/Sensors/WiFi_Logger_Visualizer.md).
+
 ----------
 
 # WiFi Logger Visualizer
@@ -52,15 +54,20 @@ This package provides three main nodes:
 ## Dependencies
 
 - ROS2 (tested with Jazzy)
+- ROS2 [rviz_2d_overlay_plugins](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins) and [example_interfaces](https://github.com/ros2/example_interfaces) packages
+- Linux _wireless-tools_ package
 - Python 3.8+
 - Matplotlib
 - SQLite3
 - NumPy
 - Seaborn
 - SciPy
-- ROS2 [rviz_2d_overlay_plugins](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins) package
 
 ## Installation
+
+You might have a desktop workstation running RViz2 and joystick related nodes, while the robot's Raspberry Pi will run the rest of the nodes.
+You will need to install components on both computers as described below.
+Sqlite3 database will, of course, be filled with data on the robot. For viewing it in standalone Heatmapper you may want to copy it over to the desktop machine.
 
 1. Clone this repository into your ROS2 workspace:
    ```
@@ -71,7 +78,11 @@ This package provides three main nodes:
 
 2. Install dependencies:
    ```
-   sudo apt install python3-scipy python3-seaborn wireless-tools sqlite3  ros-${ROS_DISTRO}-rviz-2d-overlay-plugins
+   sudo apt install python3-scipy python3-seaborn wireless-tools sqlite3
+   sudo apt install ros-${ROS_DISTRO}-rviz-2d-overlay-plugins
+
+   # ROS2 Desktop has this package installed, but for ROS2 Base you need to install it manually:
+   sudo apt install ros-${ROS_DISTRO}-example-interfaces
 
    cd ~/robot_ws
    sudo rosdep init    # do it once, if you haven't done it before
