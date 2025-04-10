@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import numpy as np
 import rclpy
 from rclpy.node import Node
 import subprocess
@@ -34,9 +35,25 @@ class WifiDataCollector(Node):
         self.declare_parameter('update_interval', 1.0)
         self.declare_parameter('max_signal_strength', -30.0)  # dBm
         self.declare_parameter('min_signal_strength', -90.0)  # dBm
+
+        # What to publish:
         self.declare_parameter('publish_metrics', True)
         self.declare_parameter('publish_overlay', True)
         
+        # RViz2 overlay parameters:
+        self.declare_parameter('ov_horizontal_alignment', 0) # LEFT:0 RIGHT:1 CENTER:2
+        self.declare_parameter('ov_vertical_alignment', 3) # CENTER:2 TOP:3 Bottom:4
+        self.declare_parameter('ov_horizontal_distance', 10)
+        self.declare_parameter('ov_vertical_distance', 10)
+        self.declare_parameter('ov_width_factor', 1.0)  # adjust overlay canvas width
+        self.declare_parameter('ov_height_factor', 1.0)  # adjust overlay canvas height
+        self.declare_parameter('ov_font', "DejaVu Sans Mono")
+        self.declare_parameter('ov_font_size', 12.0)
+        self.declare_parameter('ov_font_color', "0.8 0.8 0.3 0.8") # RGBA
+        self.declare_parameter('ov_bg_color', "0.0 0.0 0.0 0.05")
+        self.declare_parameter('ov_do_short', True)
+        self.declare_parameter('ov_do_full', True)
+
         # Get parameter values
         self.x = self.get_parameter('x').value
         self.y = self.get_parameter('y').value
@@ -45,8 +62,24 @@ class WifiDataCollector(Node):
         self.update_interval = self.get_parameter('update_interval').value
         self.max_signal_strength = self.get_parameter('max_signal_strength').value
         self.min_signal_strength = self.get_parameter('min_signal_strength').value
+
+        # What to publish:
         self.do_publish_metrics = self.get_parameter('publish_metrics').value
         self.do_publish_overlay = self.get_parameter('publish_overlay').value
+
+        # RViz2 overlay parameters:
+        self.ov_horizontal_alignment = self.get_parameter('ov_horizontal_alignment').value
+        self.ov_vertical_alignment = self.get_parameter('ov_vertical_alignment').value
+        self.ov_horizontal_distance = self.get_parameter('ov_horizontal_distance').value
+        self.ov_vertical_distance = self.get_parameter('ov_vertical_distance').value
+        self.ov_width_factor = self.get_parameter('ov_width_factor').value
+        self.ov_height_factor = self.get_parameter('ov_height_factor').value
+        self.ov_font = self.get_parameter('ov_font').value
+        self.ov_font_size = self.get_parameter('ov_font_size').value
+        self.ov_font_color = self.get_parameter('ov_font_color').value
+        self.ov_bg_color = self.get_parameter('ov_bg_color').value
+        self.ov_do_short = self.get_parameter('ov_do_short').value
+        self.ov_do_full = self.get_parameter('ov_do_full').value
 
         # Initialize WiFi interface
         if not self.wifi_interface:
@@ -321,38 +354,53 @@ class WifiDataCollector(Node):
     def publish_wifi_overlay(self, bit_rate, link_quality, signal_level, iwconfig_output):
         try:
 
-            self.get_logger().info(iwconfig_output)
+            #self.get_logger().info(iwconfig_output)
 
             msg = OverlayText() # https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins/blob/main/rviz_2d_overlay_msgs/msg/OverlayText.msg
 
             msg.action = OverlayText.ADD
 
+            #msg.line_width = 25 # int, pixels - Lines height in the overlay - doesn't seem to affect anything
+            msg.text_size = self.ov_font_size # font size
+            msg.font = self.ov_font
+
+            nlines = 0
+
             msg.text = "<pre>"
-            msg.text += iwconfig_output
+            if self.ov_do_short:
+                msg.text += f"Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
+                nlines += 1
+            if self.ov_do_full:
+                msg.text += iwconfig_output.rstrip()
+                nlines += 8
             msg.text += "</pre>"
 
+            self.get_logger().info(msg.text)
+
+            canvas_height = int(self.ov_font_size * nlines * 2.0) # adjust with ov_height_factor
+
             # text color:
-            msg.fg_color.r = 0.8
-            msg.fg_color.g = 0.8
-            msg.fg_color.b = 0.3
-            msg.fg_color.a = 0.8
+            text_color = np.fromstring(self.ov_font_color, dtype=float, sep=" ")
+            print(f"Text Color: {text_color}")
+            msg.fg_color.r = text_color[0]
+            msg.fg_color.g = text_color[1]
+            msg.fg_color.b = text_color[2]
+            msg.fg_color.a = text_color[3]
 
             # overlay canvas color:
-            msg.bg_color.r = 0.0
-            msg.bg_color.g = 0.0
-            msg.bg_color.b = 0.0
-            msg.bg_color.a = 0.0
+            bg_color = np.fromstring(self.ov_bg_color, dtype=float, sep=" ")
+            print(f"Background Color: {bg_color}")
+            msg.bg_color.r = bg_color[0]
+            msg.bg_color.g = bg_color[1]
+            msg.bg_color.b = bg_color[2]
+            msg.bg_color.a = bg_color[3]
 
-            msg.horizontal_alignment = OverlayText.LEFT # one of LEFT, CENTER, RIGHT
-            msg.vertical_alignment = OverlayText.TOP # one of TOP, CENTER, BOTTOM
-            msg.horizontal_distance = 10 # int, pixels - Horizontal distance from left/right border or center, depending on alignment
-            msg.vertical_distance = 10 # int, pixels - Vertical distance between from top/bottom border or center, depending on alignment
-            msg.width = 1200 # int, pixels - Width of the overlay canvas
-            msg.height = 200 # int, pixels - Height of the overlay canvas
-
-            #msg.line_width = 25 # int, pixels - Lines height in the overlay - doesn't seem to affect anything
-            msg.text_size = 12.0 # font size
-            msg.font = "DejaVu Sans Mono"
+            msg.horizontal_alignment = self.ov_horizontal_alignment # OverlayText.LEFT # one of LEFT, CENTER, RIGHT
+            msg.vertical_alignment = self.ov_vertical_alignment # OverlayText.TOP # one of TOP, CENTER, BOTTOM
+            msg.horizontal_distance = self.ov_horizontal_distance # int, pixels - Horizontal distance from left/right border or center, depending on alignment
+            msg.vertical_distance = self.ov_vertical_distance # int, pixels - Vertical distance between from top/bottom border or center, depending on alignment
+            msg.width = int(1200.0 * self.ov_width_factor) # int, pixels - Width of the overlay canvas
+            msg.height = int(canvas_height * self.ov_height_factor) # int, pixels - Height of the overlay canvas
 
             self.get_logger().info(f"Publishing WiFi overlay: interface: {self.wifi_interface}  {iwconfig_output}")
             self.overlay_publisher.publish(msg)
