@@ -85,16 +85,40 @@ try:
 except sqlite3.Error as e:
     print(f"Error: retrieving wifi data: {e}")
 
+bg_color = np.array([0.55, 0.8, 0.75, 0.1]) # RGBA value
+grid_color = np.array([0.2, 0.2, 1.0, 0.05])
 
 # Create the heatmap
-ax = sns.heatmap(heat_data, annot=True, cmap='coolwarm', fmt=".0f", linewidths=.2, vmin=hd_min, vmax=hd_max)
+ax = sns.heatmap(heat_data, annot=True, cmap='coolwarm', fmt=".0f",
+                 linewidths=0.2, linecolor=grid_color, clip_on=False,
+                 vmin=hd_min, vmax=hd_max)
 # https://seaborn.pydata.org/tutorial/color_palettes.html
+#ax.set_facecolor('lightgrey')
+ax.set_facecolor(bg_color)
 ax.invert_yaxis()
+
+labels_x = np.arange(min_x, max_x+2, 1)
+labels_x = np.insert(labels_x, 0, labels_x[0]-1)
+labels_y = np.arange(min_y, max_y+2, 1)
+labels_y = np.insert(labels_y, 0, labels_y[0]-1)
+
+# Set x-axis labels
+ax.set_xticks(np.arange(len(labels_x)) + 0.5) # Center labels on ticks
+ax.set_xticklabels(labels_x)
+
+# Set y-axis labels
+ax.set_yticks(np.arange(len(labels_y)) + 0.5)
+ax.set_yticklabels(labels_y)
+
+# Set the x and y axis limits:
+#ax.set_xlim(min_x, max_x)
+#ax.set_ylim(min_y, max_y)
 
 # Customize the plot (optional)
 plt.title('WiFi Signal Strength Heatmap')
 plt.xlabel('X-axis Travel')
 plt.ylabel('Y-axis Travel')
+plt.yticks(rotation=0)
 
 # Display the heatmap
 plt.show()
