@@ -11,6 +11,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from example_interfaces.msg import Float32MultiArray
 from rviz_2d_overlay_msgs.msg import OverlayText
+from sensor_msgs.msg import NavSatFix
 from tf2_ros import TransformListener, LookupException, ConnectivityException, ExtrapolationException
 from tf2_ros.buffer import Buffer
 from tf2_geometry_msgs import do_transform_pose
@@ -107,6 +108,13 @@ class WifiDataCollector(Node):
             Odometry,
             '/odometry/local',
             self.odom_callback,
+            qos
+        )
+
+        self.gps_subscriber = self.create_subscription(
+            NavSatFix,
+            '/gps/filtered',
+            self.gps_callback,
             qos
         )
 
@@ -369,8 +377,8 @@ class WifiDataCollector(Node):
             msg.text = "<pre>"
             if self.ov_do_short:
                 msg.text += f"({round(self.x)},{round(self.y)})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
-                #msg.text += f"({self.latitude},{self.longitude})\n"
-                nlines += 1
+                msg.text += f"({self.latitude}, {self.longitude}, {self.altitude})\n"
+                nlines += 2
             if self.ov_do_full:
                 msg.text += iwconfig_output.rstrip()
                 nlines += 8
@@ -446,6 +454,21 @@ class WifiDataCollector(Node):
         except Exception as e:
             self.get_logger().error(f"Unexpected error in odom_callback: {e}")
             self.current_pose = None
+
+    def gps_callback(self, msg):
+        try:
+            # Extract latitude and longitude from the gps data
+            self.latitude = msg.latitude
+            self.longitude = msg.longitude
+            self.altitude = msg.altitude
+
+            self.get_logger().info(f"GPS: ({self.latitude}, {self.longitude}, {self.altitude})\n")
+
+        except Exception as e:
+            self.get_logger().error(f"Unexpected error in gps_callback: {e}")
+            self.latitude = None
+            self.longitude = None
+            self.altitude = None
 
     def timer_callback(self):
         """Periodic callback to collect and store WiFi data."""
