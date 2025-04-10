@@ -43,6 +43,18 @@ def generate_launch_description():
         description='Number of days to keep data before cleanup'
     )
     
+    ov_do_short_arg = DeclareLaunchArgument(
+        'ov_do_short',
+        default_value='True',
+        description='Whether to display WiFi summary in RViz2 overlay'
+    )
+    
+    ov_do_full_arg = DeclareLaunchArgument(
+        'ov_do_full',
+        default_value='True',
+        description='Whether to display full WiFi info in RViz2 overlay'
+    )
+    
     # Create the WiFi logger node
     wifi_logger_node = Node(
         package='wifi_logger_visualizer',
@@ -67,8 +79,8 @@ def generate_launch_description():
             'ov_font_size': 12.0,
             'ov_font_color': "0.8 0.8 0.3 0.8", # RGBA
             'ov_bg_color': "0.0 0.0 0.0 0.05",
-            'ov_do_short': True,
-            'ov_do_full': True
+            'ov_do_short': LaunchConfiguration('ov_do_short'),
+            'ov_do_full': LaunchConfiguration('ov_do_full')
         }]
     )
     
@@ -79,5 +91,7 @@ def generate_launch_description():
         max_signal_strength_arg,
         min_signal_strength_arg,
         cleanup_days_arg,
+        ov_do_short_arg,
+        ov_do_full_arg,
         wifi_logger_node
     ]) 
