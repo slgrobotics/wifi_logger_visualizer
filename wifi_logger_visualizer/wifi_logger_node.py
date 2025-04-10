@@ -368,7 +368,8 @@ class WifiDataCollector(Node):
 
             msg.text = "<pre>"
             if self.ov_do_short:
-                msg.text += f"Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
+                msg.text += f"({round(self.x)},{round(self.y)})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
+                #msg.text += f"({self.latitude},{self.longitude})\n"
                 nlines += 1
             if self.ov_do_full:
                 msg.text += iwconfig_output.rstrip()
@@ -402,7 +403,7 @@ class WifiDataCollector(Node):
             msg.width = int(1200.0 * self.ov_width_factor) # int, pixels - Width of the overlay canvas
             msg.height = int(canvas_height * self.ov_height_factor) # int, pixels - Height of the overlay canvas
 
-            self.get_logger().info(f"Publishing WiFi overlay: interface: {self.wifi_interface}  {iwconfig_output}")
+            #self.get_logger().info(f"Publishing WiFi overlay: interface: {self.wifi_interface}  {iwconfig_output}")
             self.overlay_publisher.publish(msg)
 
         except Exception as e:

@@ -55,7 +55,20 @@ def generate_launch_description():
             'update_interval': LaunchConfiguration('update_interval'),
             'max_signal_strength': LaunchConfiguration('max_signal_strength'),
             'min_signal_strength': LaunchConfiguration('min_signal_strength'),
-            'cleanup_days': LaunchConfiguration('cleanup_days')
+            'cleanup_days': LaunchConfiguration('cleanup_days'),
+            # Text overlay parameters:
+            'ov_horizontal_alignment': 0, # LEFT:0 RIGHT:1 CENTER:2
+            'ov_vertical_alignment': 3, # CENTER:2 TOP:3 Bottom:4
+            'ov_horizontal_distance': 10,
+            'ov_vertical_distance': 10,
+            'ov_width_factor': 1.0,  # adjust overlay canvas width
+            'ov_height_factor': 1.0,  # adjust overlay canvas height
+            'ov_font': 'DejaVu Sans Mono',
+            'ov_font_size': 12.0,
+            'ov_font_color': "0.8 0.8 0.3 0.8", # RGBA
+            'ov_bg_color': "0.0 0.0 0.0 0.05",
+            'ov_do_short': True,
+            'ov_do_full': True
         }]
     )
     
