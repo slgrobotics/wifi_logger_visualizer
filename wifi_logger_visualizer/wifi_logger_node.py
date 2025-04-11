@@ -29,8 +29,8 @@ class WifiDataCollector(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         
         # Declare and get parameters
-        self.declare_parameter('x', 0.0)
-        self.declare_parameter('y', 0.0)
+        #self.declare_parameter('x', 0.0)
+        #self.declare_parameter('y', 0.0)
         self.declare_parameter('db_path', os.path.join(os.getcwd(), 'wifi_data.db'))
         self.declare_parameter('wifi_interface', '')  # Empty string means auto-detect
         self.declare_parameter('update_interval', 1.0)
@@ -56,8 +56,8 @@ class WifiDataCollector(Node):
         self.declare_parameter('ov_do_full', True)
 
         # Get parameter values
-        self.x = self.get_parameter('x').value
-        self.y = self.get_parameter('y').value
+        #self.x = self.get_parameter('x').value
+        #self.y = self.get_parameter('y').value
         self.db_path = self.get_parameter('db_path').value
         self.wifi_interface = self.get_parameter('wifi_interface').value
         self.update_interval = self.get_parameter('update_interval').value
@@ -146,11 +146,11 @@ class WifiDataCollector(Node):
     def parameter_callback(self, params):
         """Handle parameter updates."""
         for param in params:
-            if param.name == 'x':
-                self.x = param.value
-            elif param.name == 'y':
-                self.y = param.value
-            elif param.name == 'update_interval':
+            #if param.name == 'x':
+            #    self.x = param.value
+            #elif param.name == 'y':
+            #    self.y = param.value
+            if param.name == 'update_interval':
                 self.update_interval = param.value
                 self.timer.timer_period_ns = int(self.update_interval * 1e9)
             elif param.name == 'max_signal_strength':
@@ -203,6 +203,10 @@ class WifiDataCollector(Node):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     x REAL NOT NULL,
                     y REAL NOT NULL,
+                    lat REAL NULL,
+                    lon REAL NULL,
+                    gps_status INT NULL,
+                    gps_service INT NULL,
                     bit_rate REAL CHECK (bit_rate >= 0),
                     link_quality REAL CHECK (link_quality >= 0 AND link_quality <= 1),
                     signal_level REAL CHECK (signal_level >= -90.0 AND signal_level <= -30.0),
@@ -266,10 +270,10 @@ class WifiDataCollector(Node):
             else:
                 # Insert new record
                 cursor.execute("""
-                    INSERT INTO wifi_data (x, y, bit_rate, link_quality, signal_level)
+                    INSERT INTO wifi_data (x, y, lat, lon, gps_status, gps_service, bit_rate, link_quality, signal_level)
                     VALUES (?, ?, ?, ?, ?)
-                """, (self.x, self.y, bit_rate, link_quality, signal_level))
-                # self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {bit_rate}, {link_quality}, {signal_level}")
+                """, (self.x, self.y, self.latitude, self.longitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
+                self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
             conn.commit()
             conn.close()
             
@@ -376,7 +380,7 @@ class WifiDataCollector(Node):
 
             msg.text = "<pre>"
             if self.ov_do_short:
-                msg.text += f"({round(self.x)},{round(self.y)})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
+                msg.text += f"({self.x},{self.y})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
                 msg.text += f"({self.latitude}, {self.longitude}, {self.altitude})\n"
                 nlines += 2
             if self.ov_do_full:
@@ -455,20 +459,34 @@ class WifiDataCollector(Node):
             self.get_logger().error(f"Unexpected error in odom_callback: {e}")
             self.current_pose = None
 
+    def gps_unavailable(self):
+        self.latitude = None
+        self.longitude = None
+        self.altitude = None
+
     def gps_callback(self, msg):
         try:
-            # Extract latitude and longitude from the gps data
-            self.latitude = msg.latitude
-            self.longitude = msg.longitude
-            self.altitude = msg.altitude
+            # https://github.com/ros2/common_interfaces/blob/rolling/sensor_msgs/msg/NavSatFix.msg
+            # https://github.com/ros2/common_interfaces/blob/rolling/sensor_msgs/msg/NavSatStatus.msg
 
-            self.get_logger().info(f"GPS: ({self.latitude}, {self.longitude}, {self.altitude})\n")
+            self.gps_status = msg.status.status
+            self.gps_service = msg.status.gps_service
+
+            if self.gps_status > 0:
+                # Extract latitude and longitude from the gps data
+                self.latitude = msg.latitude
+                self.longitude = msg.longitude
+                self.altitude = msg.altitude
+                self.gps_sample_time = self.get_clock().now() # msg.header.stamp
+
+                self.get_logger().info(f"GPS OK: status: {self.gps_status}  service: {self.gps_service}  ({self.latitude}, {self.longitude}, {self.altitude})")
+            else:
+                self.get_logger().info(f"GPS: no data, status: {self.gps_status}  service: {self.gps_service}")
+                self.gps_unavailable()
 
         except Exception as e:
             self.get_logger().error(f"Unexpected error in gps_callback: {e}")
-            self.latitude = None
-            self.longitude = None
-            self.altitude = None
+            self.gps_unavailable()
 
     def timer_callback(self):
         """Periodic callback to collect and store WiFi data."""
@@ -476,7 +494,11 @@ class WifiDataCollector(Node):
             self.get_logger().warn("Current pose not available, skipping data insertion")
             return
 
-        self.x, self.y = self.current_pose
+        if self.gps_sample_time is None or (self.get_clock().now() - self.gps_sample_time).nanoseconds / 1e9 > 2.0:
+            self.get_logger().info(f"GPS: data too old, status: {self.gps_status}  service: {self.gps_service}")
+            self.gps_unavailable() # last GPS was more than 2 seconds ago, mark it invalid
+
+        self.x, self.y = tuple(round(x, 1) for x in self.current_pose) # let's work on a 0.1 meter grid 
         bit_rate, link_quality, signal_level = self.get_wifi_data()
 
         if self.do_publish_metrics:
