@@ -118,6 +118,7 @@ ax.set_yticklabels(labels_y)
 plt.title('WiFi Signal Strength Heatmap')
 plt.xlabel('X-axis Travel (positive: East)')
 plt.ylabel('Y-axis Travel (positive: North)')
+plt.xticks(rotation=0) # horizontal
 plt.yticks(rotation=0)
 
 # Display the heatmap
