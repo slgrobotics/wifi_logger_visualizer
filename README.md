@@ -136,7 +136,7 @@ You can use sample database from that folder to try sample _Heat Mapper_ code:
 cd ~/robot_ws/src/wifi_logger_visualizer/wifi_heat_mapper
 python3 heat_mapper.py
 ```
-![Heatmapper-standalone](https://github.com/user-attachments/assets/06fd4b20-f948-4a30-972a-8091e697df0e)
+![Screenshot from 2025-04-10 20-45-56](https://github.com/user-attachments/assets/b91a5c5e-0f10-4236-a2d7-c04d321d6673)
 
 ### WiFi Logger Node
 
