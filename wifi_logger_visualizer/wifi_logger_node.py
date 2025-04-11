@@ -29,8 +29,6 @@ class WifiDataCollector(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         
         # Declare and get parameters
-        #self.declare_parameter('x', 0.0)
-        #self.declare_parameter('y', 0.0)
         self.declare_parameter('db_path', os.path.join(os.getcwd(), 'wifi_data.db'))
         self.declare_parameter('wifi_interface', '')  # Empty string means auto-detect
         self.declare_parameter('update_interval', 1.0)
@@ -56,8 +54,6 @@ class WifiDataCollector(Node):
         self.declare_parameter('ov_do_full', True)
 
         # Get parameter values
-        #self.x = self.get_parameter('x').value
-        #self.y = self.get_parameter('y').value
         self.db_path = self.get_parameter('db_path').value
         self.wifi_interface = self.get_parameter('wifi_interface').value
         self.update_interval = self.get_parameter('update_interval').value
@@ -81,6 +77,13 @@ class WifiDataCollector(Node):
         self.ov_bg_color = self.get_parameter('ov_bg_color').value
         self.ov_do_short = self.get_parameter('ov_do_short').value
         self.ov_do_full = self.get_parameter('ov_do_full').value
+
+        # Initialize globals which can be used before being filled:
+        self.gps_sample_time = None
+        self.latitude = None
+        self.longitude = None
+        self.gps_status = -2  # STATUS_UNKNOWN
+        self.gps_service = 0  # SERVICE_UNKNOWN
 
         # Initialize WiFi interface
         if not self.wifi_interface:
@@ -271,9 +274,9 @@ class WifiDataCollector(Node):
                 # Insert new record
                 cursor.execute("""
                     INSERT INTO wifi_data (x, y, lat, lon, gps_status, gps_service, bit_rate, link_quality, signal_level)
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (self.x, self.y, self.latitude, self.longitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
-                self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
+                #self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
             conn.commit()
             conn.close()
             
@@ -381,20 +384,20 @@ class WifiDataCollector(Node):
             msg.text = "<pre>"
             if self.ov_do_short:
                 msg.text += f"({self.x},{self.y})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
-                msg.text += f"({self.latitude}, {self.longitude}, {self.altitude})\n"
+                msg.text += f"({self.latitude}, {self.longitude}, {self.altitude})  {self.gps_status_str()}  {self.gps_service_str()}\n"
                 nlines += 2
             if self.ov_do_full:
                 msg.text += iwconfig_output.rstrip()
                 nlines += 8
             msg.text += "</pre>"
 
-            self.get_logger().info(msg.text)
+            #self.get_logger().info(msg.text)
 
             canvas_height = int(self.ov_font_size * nlines * 2.0) # adjust with ov_height_factor
 
             # text color:
             text_color = np.fromstring(self.ov_font_color, dtype=float, sep=" ")
-            print(f"Text Color: {text_color}")
+            #print(f"Text Color: {text_color}")
             msg.fg_color.r = text_color[0]
             msg.fg_color.g = text_color[1]
             msg.fg_color.b = text_color[2]
@@ -402,7 +405,7 @@ class WifiDataCollector(Node):
 
             # overlay canvas color:
             bg_color = np.fromstring(self.ov_bg_color, dtype=float, sep=" ")
-            print(f"Background Color: {bg_color}")
+            #print(f"Background Color: {bg_color}")
             msg.bg_color.r = bg_color[0]
             msg.bg_color.g = bg_color[1]
             msg.bg_color.b = bg_color[2]
@@ -463,6 +466,41 @@ class WifiDataCollector(Node):
         self.latitude = None
         self.longitude = None
         self.altitude = None
+        self.gps_status = -2  # STATUS_UNKNOWN
+        self.gps_service = 0  # SERVICE_UNKNOWN
+        #self.gps_sample_time = None
+
+    def gps_status_str(self):
+        str = "Unknown"
+
+        match self.gps_status:
+            case -1:
+                str = "No Fix"
+            case 0:
+                str = "Fix"
+            case 1:
+                str = "Fix + Sat Augm"
+            case 2:
+                str = "Fix + Ground Augm"
+
+        return str
+
+    def gps_service_str(self):
+        str = ""
+
+        if self.gps_service & 1:
+            str += "GPS "
+
+        if self.gps_service & 2:
+            str += "GLONASS "
+
+        if self.gps_service & 4:
+            str += "BeiDou "
+
+        if self.gps_service & 8:
+            str += "Galileo "
+
+        return str.rstrip()
 
     def gps_callback(self, msg):
         try:
@@ -470,18 +508,18 @@ class WifiDataCollector(Node):
             # https://github.com/ros2/common_interfaces/blob/rolling/sensor_msgs/msg/NavSatStatus.msg
 
             self.gps_status = msg.status.status
-            self.gps_service = msg.status.gps_service
+            self.gps_service = msg.status.service
 
             if self.gps_status > 0:
                 # Extract latitude and longitude from the gps data
                 self.latitude = msg.latitude
                 self.longitude = msg.longitude
-                self.altitude = msg.altitude
+                self.altitude = round(msg.altitude,1)
                 self.gps_sample_time = self.get_clock().now() # msg.header.stamp
 
-                self.get_logger().info(f"GPS OK: status: {self.gps_status}  service: {self.gps_service}  ({self.latitude}, {self.longitude}, {self.altitude})")
+                #self.get_logger().info(f"GPS OK: status: {self.gps_status_str()}  service: {self.gps_service_str()}  ({self.latitude}, {self.longitude}, {self.altitude})")
             else:
-                self.get_logger().info(f"GPS: no data, status: {self.gps_status}  service: {self.gps_service}")
+                self.get_logger().info(f"GPS: no data, status: {self.gps_status_str()}  service: {self.gps_service_str()}")
                 self.gps_unavailable()
 
         except Exception as e:
@@ -495,7 +533,7 @@ class WifiDataCollector(Node):
             return
 
         if self.gps_sample_time is None or (self.get_clock().now() - self.gps_sample_time).nanoseconds / 1e9 > 2.0:
-            self.get_logger().info(f"GPS: data too old, status: {self.gps_status}  service: {self.gps_service}")
+            self.get_logger().warning(f"GPS: data too old, status: {self.gps_status_str()}  service: {self.gps_service_str()}")
             self.gps_unavailable() # last GPS was more than 2 seconds ago, mark it invalid
 
         self.x, self.y = tuple(round(x, 1) for x in self.current_pose) # let's work on a 0.1 meter grid 
