@@ -25,11 +25,11 @@ try:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT x,y,bit_rate,link_quality,signal_level FROM wifi_data")
+    cursor.execute("SELECT x,y,bit_rate,link_quality,lon FROM wifi_data")
     #cursor.execute("SELECT * FROM wifi_data")
     #cursor.execute("SELECT count(*) FROM wifi_data")
     rows = np.array(cursor.fetchall())
-    rows = np.round(rows, decimals=1) * scale_factor
+    #rows = np.round(rows, decimals=1) * scale_factor
 
     conn.close()
     row_count = len(rows)
@@ -78,12 +78,12 @@ try:
                 data_y = int(round(row[1]-min_y))+1
                 if data_x==x and data_y==y:
                     records_cnt += 1
-                    hd_val = math.floor(row[4] / scale_factor) # signal_level=4; scale it back, round down
+                    hd_val = row[4] / scale_factor # signal_level=4; scale it back, round down
                     hd_avg += hd_val
                     hd_min = min(hd_min, hd_val)
                     hd_max = max(hd_max, hd_val)
                     heat_data[y][x] = hd_val
-                    #heat_data[y][x] = records_cnt  # uncomment to see records_cnt numbers on the heatmap
+                    #heat_data[y][x] = records_cnt
                     #print(f"{data_x} {data_y}   {x} {y} {heat_data[y][x]}  records_cnt: {records_cnt}")
             if records_cnt > 0:
                 hd_avg /= records_cnt
@@ -97,7 +97,7 @@ bg_color = np.array([0.55, 0.8, 0.75, 0.1]) # RGBA value
 grid_color = np.array([0.2, 0.2, 1.0, 0.05])
 
 # Create the heatmap
-ax = sns.heatmap(heat_data, annot=True, cmap='coolwarm', fmt=".0f",
+ax = sns.heatmap(heat_data, annot=True, cmap='coolwarm',  fmt=".6f",
                  linewidths=0.2, linecolor=grid_color, clip_on=False) #, vmin=hd_min, vmax=hd_max)
 # https://seaborn.pydata.org/tutorial/color_palettes.html
 #ax.set_facecolor('lightgrey')
