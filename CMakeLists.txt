@@ -22,8 +22,9 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install launch files
+# Install launch files and config
 install(DIRECTORY
+  config
   launch
   DESTINATION share/${PROJECT_NAME}
 )

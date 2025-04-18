@@ -11,13 +11,30 @@ from scipy.interpolate import Rbf  # Import Radial Basis Function interpolator
 from rclpy.time import Time
 from rclpy.duration import Duration
 import os
+from ament_index_python.packages import get_package_share_directory
+import xml.etree.ElementTree as ET
+from datetime import datetime
 
 class WifiVisualizerNode(Node):
     def __init__(self):
         super().__init__('wifi_visualizer_node')
         
+        # Log source file name, version, and compile time
+        source_file = os.path.basename(__file__)
+        package_xml_path = os.path.join(get_package_share_directory('wifi_logger_visualizer'), 'package.xml')
+        try:
+            tree = ET.parse(package_xml_path)
+            root = tree.getroot()
+            version = root.find('version').text
+        except Exception as e:
+            version = "unknown"
+            self.get_logger().warn(f"Could not retrieve version from package.xml: {e}")
+
+        compile_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.get_logger().info(f"Source File: {source_file}, Version: {version}, Compile Time: {compile_time}")
+        
         # Declare parameters
-        self.declare_parameter('db_path', os.path.join(os.getcwd(), '/home/ros/wifi_visualizer_logger_ws/wifi_data.db'))
+        self.declare_parameter('db_path', 'wifi_data.db')
         self.declare_parameter('publish_frequency', 1.0)  # Hz
         self.declare_parameter('db_check_frequency', 2.0)  # Hz
         self.declare_parameter('max_interpolation_distance', 1.0)  # meters
@@ -38,14 +55,14 @@ class WifiVisualizerNode(Node):
         
         # Log all parameter values
         self.get_logger().info("Parameter values:")
-        self.get_logger().info(f"  db_path: {self.db_path}")
-        self.get_logger().info(f"  publish_frequency: {self.publish_frequency} Hz")
+        self.get_logger().info(f"  costmap_topic: {self.costmap_topic}")
         self.get_logger().info(f"  db_check_frequency: {self.db_check_frequency} Hz")
-        self.get_logger().info(f"  max_interpolation_distance: {self.max_interpolation_distance} meters")
+        self.get_logger().info(f"  db_path: {self.db_path}")
+        self.get_logger().info(f"  enable_bit_rate: {self.enable_bit_rate}")
         self.get_logger().info(f"  enable_link_quality: {self.enable_link_quality}")
         self.get_logger().info(f"  enable_signal_level: {self.enable_signal_level}")
-        self.get_logger().info(f"  enable_bit_rate: {self.enable_bit_rate}")
-        self.get_logger().info(f"  costmap_topic: {self.costmap_topic}")
+        self.get_logger().info(f"  max_interpolation_distance: {self.max_interpolation_distance} meters")
+        self.get_logger().info(f"  publish_frequency: {self.publish_frequency} Hz")
         
         # Initialize costmap dimensions
         self.costmap_resolution = None
@@ -296,7 +313,7 @@ class WifiVisualizerNode(Node):
         current_timestamp = self.get_latest_timestamp()
         if current_timestamp and current_timestamp != self.last_timestamp:
             self.last_timestamp = current_timestamp
-            self.get_logger().info("Database updated, will publish new costmaps")
+            # self.get_logger().info("Database updated, will publish new costmaps")
 
     def publish_timer_callback(self):
         """Publish costmaps if needed."""
