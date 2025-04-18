@@ -25,27 +25,54 @@ Simple commands (note the semicolon at the end):
    SQLite version 3.45.1 2024-01-30 16:01:20
 Enter ".help" for usage hints.
 
-sqlite> select count(*) from wifi_data;
-476
-
 sqlite> .headers ON
+sqlite> select count(*) from wifi_data;
+count(*)
+282
+
 sqlite> SELECT * from wifi_data LIMIT 2;
-timestamp|x|y|bit_rate|link_quality|signal_level
-2025-03-29 05:00:19|8.61574735023807|2.26927850638535|960.7|0.828571428571429|-52.0
-2025-03-29 05:00:20|8.61576060339672|2.26931183264393|960.7|0.814285714285714|-53.0
+id|timestamp|x|y|lat|lon|gps_status|gps_service|bit_rate|link_quality|signal_level
+1|2025-04-11 16:44:55|6.7|-0.4|33.9521889999925|-105.331214000035|2|0|390.0|0.771428571428571|-56.0
+2|2025-04-11 16:44:53|6.6|-0.4|33.9521895297565|-105.331215287443|2|0|390.0|0.757142857142857|-57.0
 
 sqlite> .tables
 wifi_data
 sqlite> .schema wifi_data
 CREATE TABLE wifi_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    x REAL,
-                    y REAL,
-                    bit_rate REAL,
-                    link_quality REAL,
-                    signal_level REAL,
-                    PRIMARY KEY (x, y)
+                    x REAL NOT NULL,
+                    y REAL NOT NULL,
+                    lat REAL NULL,
+                    lon REAL NULL,
+                    gps_status INT NULL,
+                    gps_service INT NULL,
+                    bit_rate REAL CHECK (bit_rate >= 0),
+                    link_quality REAL CHECK (link_quality >= 0 AND link_quality <= 1),
+                    signal_level REAL CHECK (signal_level >= -90.0 AND signal_level <= -30.0),
+                    UNIQUE(x, y, timestamp)
                 );
+CREATE INDEX idx_timestamp ON wifi_data(timestamp);
+CREATE INDEX idx_coordinates ON wifi_data(x, y);
 sqlite> 
 ```
-Refer also to https://github.com/wimblerobotics/Sigyn/blob/main/Documentation/Notes/wifi_signal.md
+## Working with GPS data
+
+When outdoors, a robot can use GNSS (NavSatFix topic) and the *WiFi Logger* collects that data. It is possible that _odometry_ data in the database becomes less reliable, than accumulated GNSS coordinates (for example, when robot nodes are restarted and odometry zeroed out).
+
+latlon_to_xy.py utility converts lat,lon fields to relative x,y coordinates and fills those in the database, overwriting the x and y fields.
+
+**Note:**
+- Please make a backup of your original database before running this utility.
+- The utility will delete all records *WHERE lat IS NULL or lon IS NULL*
+
+Once the conversion is finished, _Heat Mapper_ can be run and will display the grid based on relative distance - meters from (_min(lat),min(lon)_) coordinates:
+
+![Screenshot from 2025-04-18 12-20-47](https://github.com/user-attachments/assets/ccea20db-d2f2-4142-a6a2-9e3618da05ff)
+
+![Screenshot from 2025-04-18 12-23-54](https://github.com/user-attachments/assets/cd1e64e3-a849-4a26-a658-b80fd8f0dda8)
+
+
+----------------
+
+**Back to** [Main Page](https://github.com/slgrobotics/wifi_logger_visualizer)
