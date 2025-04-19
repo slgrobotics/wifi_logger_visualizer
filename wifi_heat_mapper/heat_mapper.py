@@ -128,6 +128,12 @@ plt.ylabel('Y-axis Travel (positive: North)')
 plt.xticks(rotation=0) # horizontal
 plt.yticks(rotation=0)
 
+# https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.tight_layout.html#matplotlib.pyplot.tight_layout
+# adjust the rect numbers for your screen
+plt.tight_layout(pad=0.0, w_pad=0.0, h_pad=0.0, rect=(-0.05,-0.05,1.03,1.02))
+
 # Display the heatmap
+figManager = plt.get_current_fig_manager()
+figManager.resize(*figManager.window.maxsize())
 plt.show()
 
