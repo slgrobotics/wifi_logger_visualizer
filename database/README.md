@@ -58,13 +58,15 @@ sqlite>
 ```
 ## Working with GPS data
 
-When outdoors, a robot can use GNSS (NavSatFix topic) and the *WiFi Logger* collects that data. It is possible that _odometry_ data in the database becomes less reliable, than accumulated GNSS coordinates (for example, when robot nodes are restarted and odometry zeroed out).
+When outdoors, a robot can use GNSS ("_NavSatFix_" type, "/gps/filtered" or "/gps/fix" topic) and the *WiFi Logger* should collect that data.
+It is possible that _odometry_-derived data in the database (_x,y_ fields) becomes less reliable than accumulated GNSS coordinates (this happens, for example, when robot nodes are restarted and odometry is zeroed out).
 
-latlon_to_xy.py utility converts lat,lon fields to relative x,y coordinates and fills those in the database, overwriting the x and y fields.
+*latlon_to_xy.py* utility converts _lat,lon_ fields to relative _x,y_ coordinates and fills (updates) those in the database, overwriting the _x_ and _y_ fields.
 
 **Note:**
 - Please make a backup of your original database before running this utility.
 - The utility will delete all records *WHERE lat IS NULL or lon IS NULL*
+- The utility will update/overwrite the _x_ and _y_ fields.
 
 Once the conversion is finished, _Heat Mapper_ can be run and will display the grid based on relative distance - meters from (_min(lat),min(lon)_) coordinates:
 
