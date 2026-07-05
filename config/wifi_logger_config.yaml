@@ -8,6 +8,8 @@
       decimals_to_round_coordinates: 3
       publish_metrics: true
       publish_overlay: true
+      # Set false on robots without a GPS receiver (skips /gps/filtered sub + stale warnings)
+      use_gps: false
       # RViz2 overlay parameters
       ov_horizontal_alignment: 0  # LEFT:0 RIGHT:1 CENTER:2
       ov_vertical_alignment: 3    # CENTER:2 TOP:3 Bottom:4
