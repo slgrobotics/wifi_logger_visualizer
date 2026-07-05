@@ -1,75 +1,59 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess
-from launch.substitutions import LaunchConfiguration, FindExecutable
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 import os
 
+
 def generate_launch_description():
-    # Declare the standalone argument
+    # Default shared params file (same one used by the wifi_logger node)
+    default_params_file = os.path.join(
+        get_package_share_directory('wifi_logger_visualizer'),
+        'config',
+        'wifi_logger_config.yaml',
+    )
+
+    params_file_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=default_params_file,
+        description='Path to a ROS 2 params YAML file (shared with wifi_logger)',
+    )
+
     standalone_arg = DeclareLaunchArgument(
         'standalone',
         default_value='false',
-        description='Whether to publish a costmap (true) or display matplotlib visualization (false)'
+        description='true: matplotlib window; false: publish RViz MarkerArrays',
     )
 
-    # Get the current working directory for the default db_path
-    current_dir = os.getcwd()
-    default_db_path = os.path.join(current_dir, 'wifi_data.db')
-
-    # Declare the db_path argument
+    # Optional CLI override for the DB path; empty string means "use YAML value".
     db_path_arg = DeclareLaunchArgument(
         'db_path',
-        default_value=default_db_path,
-        description='Path to the SQLite database file'
+        default_value='',
+        description='Optional SQLite DB path override (defaults to YAML value)',
     )
 
-    # Declare the scale_factor argument
-    scale_factor_arg = DeclareLaunchArgument(
-        'scale_factor',
-        default_value='1.0',
-        description='Scale factor for the heatmap visualization'
-    )
-    
-    # Declare the text_size argument - match the default in the node (0.25)
-    text_size_arg = DeclareLaunchArgument(
-        'text_size',
-        default_value='0.08',
-        description='Size of the text markers in meters'
-    )
+    # Launch args always win over YAML in the parameters= list ordering below.
+    # We only include db_path in the override dict when the user provided one.
+    def _build_node(context):
+        overrides = {'standalone': LaunchConfiguration('standalone').perform(context) == 'true'}
+        db_path = LaunchConfiguration('db_path').perform(context)
+        if db_path:
+            overrides['db_path'] = db_path
+        return [Node(
+            package='wifi_logger_visualizer',
+            executable='heat_mapper_node.py',
+            name='heat_mapper',
+            parameters=[LaunchConfiguration('params_file'), overrides],
+            output='screen',
+        )]
 
-    # Create the heat mapper node with explicit parameter passing
-    heat_mapper_node = Node(
-        package='wifi_logger_visualizer',
-        executable='heat_mapper_node.py',
-        name='heat_mapper',
-        parameters=[{
-            'standalone': LaunchConfiguration('standalone'),
-            'db_path': LaunchConfiguration('db_path'),
-            'scale_factor': LaunchConfiguration('scale_factor'),
-            'text_size': LaunchConfiguration('text_size'),
-        }],
-        output='screen'
-    )
-    
-    # Create a command to set the text_size parameter after the node starts
-    # This is a workaround for Jazzy parameter handling
-    set_text_size_cmd = ExecuteProcess(
-        cmd=[
-            FindExecutable(name='ros2'),
-            'param',
-            'set',
-            '/heat_mapper',
-            'text_size',
-            LaunchConfiguration('text_size')
-        ],
-        output='screen'
-    )
+    from launch.actions import OpaqueFunction
+    heat_mapper_node = OpaqueFunction(function=_build_node)
 
     return LaunchDescription([
+        params_file_arg,
         standalone_arg,
         db_path_arg,
-        scale_factor_arg,
-        text_size_arg,
         heat_mapper_node,
-        set_text_size_cmd
-    ]) 
+    ])

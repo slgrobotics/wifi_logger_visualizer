@@ -45,7 +45,12 @@ class HeatMapperNode(Node):
         self.declare_parameter('text_size', 0.08)  # Text size in meters
         self.declare_parameter('do_publish_markers', True)  # Whether to publish value markers
         self.declare_parameter('do_publish_text_markers', True)  # Whether to publish text markers
-        
+        # Color mapping parameters (names match wifi_logger YAML for shared config)
+        self.declare_parameter('min_signal_level', -80.0)  # dBm at cold end of ramp when normalize=False
+        self.declare_parameter('max_signal_level', -50.0)  # dBm at hot end of ramp when normalize=False
+        self.declare_parameter('normalize', True)          # Auto-fit ramp to observed data range
+        self.declare_parameter('marker_alpha', 1.0)        # Opacity of cube markers (0..1)
+
         # Get parameter values
         self.standalone = self.get_parameter('standalone').value
         self.db_path = self.get_parameter('db_path').value
@@ -54,7 +59,11 @@ class HeatMapperNode(Node):
         self.text_size = self.get_parameter('text_size').value
         self.do_publish_markers = self.get_parameter('do_publish_markers').value
         self.do_publish_text_markers = self.get_parameter('do_publish_text_markers').value
-        
+        self.min_signal_level = float(self.get_parameter('min_signal_level').value)
+        self.max_signal_level = float(self.get_parameter('max_signal_level').value)
+        self.normalize = bool(self.get_parameter('normalize').value)
+        self.marker_alpha = float(self.get_parameter('marker_alpha').value)
+
         # Log parameter values
         self.get_logger().info(f"Parameter values:")
         self.get_logger().info(f"  costmap_topic: {self.costmap_topic}")
@@ -64,6 +73,10 @@ class HeatMapperNode(Node):
         self.get_logger().info(f"  scale_factor: {self.scale_factor}")
         self.get_logger().info(f"  standalone: {self.standalone}")
         self.get_logger().info(f"  text_size: {self.text_size} (type: {type(self.text_size)})")
+        self.get_logger().info(f"  min_signal_level: {self.min_signal_level} dBm")
+        self.get_logger().info(f"  max_signal_level: {self.max_signal_level} dBm")
+        self.get_logger().info(f"  normalize: {self.normalize}")
+        self.get_logger().info(f"  marker_alpha: {self.marker_alpha}")
         
         # Initialize costmap dimensions
         self.costmap_resolution = None
@@ -181,20 +194,23 @@ class HeatMapperNode(Node):
                 text_marker.action = Marker.ADD
                 text_marker.scale.z = self.text_size  # Text size
             
+            # Determine color-ramp range: auto-fit to data or use fixed config values
+            signal_values = [row[4] for row in data]
+            if self.normalize and signal_values:
+                lo = float(min(signal_values))
+                hi = float(max(signal_values))
+                if hi - lo < 1e-3:  # Degenerate range -> fall back to configured window
+                    lo = self.min_signal_level
+                    hi = self.max_signal_level
+            else:
+                lo = self.min_signal_level
+                hi = self.max_signal_level
+
             # Process each data point
             for x, y, timestamp, link_quality, signal_level in data:
-                # Convert signal strength to color (red for weak, green for strong)
-                # Assuming signal_level is in dBm, typically ranging from -100 to 0
-                normalized_strength = (signal_level + 100) / 100.0  # Normalize to 0-1
-                normalized_strength = max(0.0, min(1.0, normalized_strength))  # Clamp to 0-1
-                
-                # Create color gradient from red (weak) to green (strong)
-                color = ColorRGBA()
-                color.r = 1.0 - normalized_strength
-                color.g = normalized_strength
-                color.b = 0.0
-                color.a = 0.8  # Slightly transparent
-                
+                # ROYGB rainbow ramp: weakest=red, strongest=blue
+                color = self._signal_to_color(signal_level, lo, hi)
+
                 # Add point to value marker
                 if self.do_publish_markers:
                     point = Point()
@@ -203,7 +219,7 @@ class HeatMapperNode(Node):
                     point.z = 0.0
                     value_marker.points.append(point)
                     value_marker.colors.append(color)
-                
+
                 # Add text annotation
                 if self.do_publish_text_markers:
                     text_point = Point()
@@ -211,13 +227,16 @@ class HeatMapperNode(Node):
                     text_point.y = y
                     text_point.z = 0.2  # Position text above the cube
                     text_marker.pose.position = text_point
-                    text_marker.text = f"{signal_level:.1f}"
+                    # All signal_level values are negative dBm; drop the '-' and
+                    # round to whole numbers so labels fit inside the marker cube.
+                    text_marker.text = f"{abs(signal_level):.0f}"
+                    # Set color BEFORE deepcopy; force full opacity for readable text
+                    text_marker.color.r = color.r
+                    text_marker.color.g = color.g
+                    text_marker.color.b = color.b
+                    text_marker.color.a = 1.0
                     text_markers.markers.append(copy.deepcopy(text_marker))
                     text_marker.id += 1
-                    text_marker.color.r = 1.0 - normalized_strength 
-                    text_marker.color.g = normalized_strength
-                    text_marker.color.b = 0.0
-                    text_marker.color.a = 1.0
             
             # Publish value markers
             if self.do_publish_markers:
@@ -229,7 +248,42 @@ class HeatMapperNode(Node):
             if self.do_publish_text_markers:
                 self.text_markers_pub.publish(text_markers)
                 # self.get_logger().info(f'Published {len(text_markers.markers)} text markers')
-    
+
+    def _signal_to_color(self, signal_level, lo, hi):
+        """Map a WiFi signal level (dBm) to a saturated ROYGB rainbow ColorRGBA.
+
+        Interpolates linearly across 5 stops (red, orange, yellow, green, blue)
+        so weak signals are red and strong signals are blue, with no muddy
+        midtones. ``lo``/``hi`` set the dBm values that map to the ramp
+        endpoints (either fixed config or per-cycle data min/max).
+        """
+        if hi <= lo:
+            t = 0.5
+        else:
+            t = (float(signal_level) - lo) / (hi - lo)
+        t = max(0.0, min(1.0, t))
+
+        # ROYGB stops, weak (red) -> strong (blue)
+        stops = (
+            (1.0, 0.0, 0.0),  # red
+            (1.0, 0.5, 0.0),  # orange
+            (1.0, 1.0, 0.0),  # yellow
+            (0.0, 1.0, 0.0),  # green
+            (0.0, 0.0, 1.0),  # blue
+        )
+        n = len(stops) - 1
+        seg = min(int(t * n), n - 1)
+        frac = t * n - seg
+        r0, g0, b0 = stops[seg]
+        r1, g1, b1 = stops[seg + 1]
+
+        color = ColorRGBA()
+        color.r = r0 + (r1 - r0) * frac
+        color.g = g0 + (g1 - g0) * frac
+        color.b = b0 + (b1 - b0) * frac
+        color.a = self.marker_alpha
+        return color
+
     def create_heatmap(self):
         """Create a matplotlib heatmap from the database data."""
         try:
@@ -296,8 +350,12 @@ class HeatMapperNode(Node):
             return
 
         # Create the heatmap
+        # Use configured window when normalize=False, otherwise stretch to observed range.
+        vmin = hd_min if self.normalize else self.min_signal_level
+        vmax = hd_max if self.normalize else self.max_signal_level
         plt.figure(figsize=(10, 8))
-        ax = sns.heatmap(heat_data, annot=True, cmap='coolwarm', fmt=".0f", linewidths=.2, vmin=hd_min, vmax=hd_max)
+        # 'turbo_r' gives a perceptually smooth ROYGB rainbow (red=weak -> blue=strong)
+        ax = sns.heatmap(heat_data, annot=True, cmap='turbo_r', fmt=".0f", linewidths=.2, vmin=vmin, vmax=vmax)
         # https://seaborn.pydata.org/tutorial/color_palettes.html
         ax.invert_yaxis()
 
