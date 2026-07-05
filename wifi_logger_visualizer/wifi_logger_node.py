@@ -38,6 +38,9 @@ class WifiDataCollector(Node):
         # What to publish:
         self.declare_parameter('publish_metrics', True)
         self.declare_parameter('publish_overlay', True)
+
+        # GPS integration (set false on robots without a GPS receiver):
+        self.declare_parameter('use_gps', False)
         
         # RViz2 overlay parameters:
         self.declare_parameter('ov_horizontal_alignment', 0) # LEFT:0 RIGHT:1 CENTER:2
@@ -64,6 +67,9 @@ class WifiDataCollector(Node):
         self.do_publish_metrics = self.get_parameter('publish_metrics').value
         self.do_publish_overlay = self.get_parameter('publish_overlay').value
 
+        # GPS integration:
+        self.use_gps = self.get_parameter('use_gps').value
+
         # RViz2 overlay parameters:
         self.ov_horizontal_alignment = self.get_parameter('ov_horizontal_alignment').value
         self.ov_vertical_alignment = self.get_parameter('ov_vertical_alignment').value
@@ -82,6 +88,7 @@ class WifiDataCollector(Node):
         self.gps_sample_time = None
         self.latitude = None
         self.longitude = None
+        self.altitude = None
         self.gps_status = -2  # STATUS_UNKNOWN
         self.gps_service = 0  # SERVICE_UNKNOWN
 
@@ -114,12 +121,15 @@ class WifiDataCollector(Node):
             qos
         )
 
-        self.gps_subscriber = self.create_subscription(
-            NavSatFix,
-            '/gps/filtered',
-            self.gps_callback,
-            qos
-        )
+        if self.use_gps:
+            self.gps_subscriber = self.create_subscription(
+                NavSatFix,
+                '/gps/filtered',
+                self.gps_callback,
+                qos
+            )
+        else:
+            self.get_logger().info("GPS disabled (use_gps=false); skipping /gps/filtered subscription")
 
         if self.do_publish_metrics:
             self.metrics_publisher = self.create_publisher(
@@ -532,9 +542,10 @@ class WifiDataCollector(Node):
             self.get_logger().warn("Current pose not available, skipping data insertion")
             return
 
-        if self.gps_sample_time is None or (self.get_clock().now() - self.gps_sample_time).nanoseconds / 1e9 > 2.0:
-            self.get_logger().warning(f"GPS: data too old, status: {self.gps_status_str()}  service: {self.gps_service_str()}")
-            self.gps_unavailable() # last GPS was more than 2 seconds ago, mark it invalid
+        if self.use_gps:
+            if self.gps_sample_time is None or (self.get_clock().now() - self.gps_sample_time).nanoseconds / 1e9 > 2.0:
+                self.get_logger().warning(f"GPS: data too old, status: {self.gps_status_str()}  service: {self.gps_service_str()}")
+                self.gps_unavailable() # last GPS was more than 2 seconds ago, mark it invalid
 
         self.x, self.y = tuple(round(x, 1) for x in self.current_pose) # let's work on a 0.1 meter grid 
         bit_rate, link_quality, signal_level = self.get_wifi_data()
