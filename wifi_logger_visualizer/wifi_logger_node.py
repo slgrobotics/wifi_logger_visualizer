@@ -28,6 +28,9 @@ class WifiDataCollector(Node):
         self.tf_buffer = Buffer(node=self)
         self.tf_listener = TransformListener(self.tf_buffer, self)
         
+        # GPS integration (set false on robots without a GPS receiver):
+        self.declare_parameter('use_gps', False)
+        
         # Declare and get parameters
         self.declare_parameter('db_path', os.path.join(os.getcwd(), 'wifi_data.db'))
         self.declare_parameter('wifi_interface', '')  # Empty string means auto-detect
@@ -39,9 +42,6 @@ class WifiDataCollector(Node):
         self.declare_parameter('publish_metrics', True)
         self.declare_parameter('publish_overlay', True)
 
-        # GPS integration (set false on robots without a GPS receiver):
-        self.declare_parameter('use_gps', False)
-        
         # RViz2 overlay parameters:
         self.declare_parameter('ov_horizontal_alignment', 0) # LEFT:0 RIGHT:1 CENTER:2
         self.declare_parameter('ov_vertical_alignment', 3) # CENTER:2 TOP:3 Bottom:4
@@ -56,6 +56,9 @@ class WifiDataCollector(Node):
         self.declare_parameter('ov_do_short', True)
         self.declare_parameter('ov_do_full', True)
 
+        # GPS integration:
+        self.use_gps = self.get_parameter('use_gps').value
+
         # Get parameter values
         self.db_path = self.get_parameter('db_path').value
         self.wifi_interface = self.get_parameter('wifi_interface').value
@@ -66,9 +69,6 @@ class WifiDataCollector(Node):
         # What to publish:
         self.do_publish_metrics = self.get_parameter('publish_metrics').value
         self.do_publish_overlay = self.get_parameter('publish_overlay').value
-
-        # GPS integration:
-        self.use_gps = self.get_parameter('use_gps').value
 
         # RViz2 overlay parameters:
         self.ov_horizontal_alignment = self.get_parameter('ov_horizontal_alignment').value
@@ -85,12 +85,8 @@ class WifiDataCollector(Node):
         self.ov_do_full = self.get_parameter('ov_do_full').value
 
         # Initialize globals which can be used before being filled:
+        self.gps_unavailable()
         self.gps_sample_time = None
-        self.latitude = None
-        self.longitude = None
-        self.altitude = None
-        self.gps_status = -2  # STATUS_UNKNOWN
-        self.gps_service = 0  # SERVICE_UNKNOWN
 
         # Initialize WiFi interface
         if not self.wifi_interface:
@@ -478,7 +474,7 @@ class WifiDataCollector(Node):
         self.altitude = None
         self.gps_status = -2  # STATUS_UNKNOWN
         self.gps_service = 0  # SERVICE_UNKNOWN
-        #self.gps_sample_time = None
+        #self.gps_sample_time = None  # don't reset it here
 
     def gps_status_str(self):
         str = "Unknown"
