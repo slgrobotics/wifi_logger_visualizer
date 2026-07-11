@@ -13,7 +13,28 @@ def generate_launch_description():
     package_dir = get_package_share_directory(package_name)
     config_filepath = os.path.join(package_dir, 'config', 'wifi_logger_config.yaml')
 
-    # Declare launch arguments
+    # Declare conditions:
+    run_logger = LaunchConfiguration('run_logger')
+    run_logger_arg = DeclareLaunchArgument(
+        'run_logger',
+        default_value='True',
+        description='Run the wifi logger node'
+    )
+    ld.add_action(run_logger_arg)
+    
+    run_visualizer = LaunchConfiguration('run_visualizer')
+    run_visualizer_arg = DeclareLaunchArgument(
+        'run_visualizer',
+        default_value='True',
+        description='Run the wifi visualizer node'
+    )
+    ld.add_action(run_visualizer_arg)
+    
+    ld.add_action(LogInfo(msg=["[wifi_logger_visualizer.launch.py] ",
+                               " run_logger: ", run_logger,
+                               ", run_visualizer: ", run_visualizer]))
+  
+    # Declare launch arguments for nodes:
     db_path_arg = DeclareLaunchArgument(
         'db_path',
         default_value=os.path.join(os.getcwd(), 'wifi_data.db'),
@@ -74,26 +95,6 @@ def generate_launch_description():
     ]:
         ld.add_action(action)
     
-    run_logger = LaunchConfiguration('run_logger')
-    run_logger_arg = DeclareLaunchArgument(
-        'run_logger',
-        default_value='False',
-        description='Run the wifi logger node'
-    )
-    ld.add_action(run_logger_arg)
-    
-    run_visualizer = LaunchConfiguration('run_visualizer')
-    run_visualizer_arg = DeclareLaunchArgument(
-        'run_visualizer',
-        default_value='True',
-        description='Run the wifi visualizer node'
-    )
-    ld.add_action(run_visualizer_arg)
-    
-    ld.add_action(LogInfo(msg=["[wifi_logger_visualizer.launch.py] ",
-                               " run_logger: ", run_logger,
-                               ", run_visualizer: ", run_visualizer]))
-    
     wifi_loger_node = Node(
         condition=IfCondition(run_logger),
         package=package_name,
@@ -111,16 +112,19 @@ def generate_launch_description():
         executable='wifi_visualizer_node.py',
         name='wifi_visualizer_node',
         output='screen',
-        parameters=[{
-            'db_path': LaunchConfiguration('db_path'),
-            'publish_frequency': LaunchConfiguration('publish_frequency'),
-            'db_check_frequency': LaunchConfiguration('db_check_frequency'),
-            'max_interpolation_distance': LaunchConfiguration('max_interpolation_distance'),
-            'enable_link_quality': LaunchConfiguration('enable_link_quality'),
-            'enable_signal_level': LaunchConfiguration('enable_signal_level'),
-            'enable_bit_rate': LaunchConfiguration('enable_bit_rate'),
-            'costmap_topic': LaunchConfiguration('costmap_topic')
-        }]
+        parameters=[
+            config_filepath,
+            {
+                'db_path': LaunchConfiguration('db_path'),
+                'publish_frequency': LaunchConfiguration('publish_frequency'),
+                'db_check_frequency': LaunchConfiguration('db_check_frequency'),
+                'max_interpolation_distance': LaunchConfiguration('max_interpolation_distance'),
+                'enable_link_quality': LaunchConfiguration('enable_link_quality'),
+                'enable_signal_level': LaunchConfiguration('enable_signal_level'),
+                'enable_bit_rate': LaunchConfiguration('enable_bit_rate'),
+                'costmap_topic': LaunchConfiguration('costmap_topic')
+            }
+        ]
     )
     ld.add_action(wifi_visualizer_node)
     
