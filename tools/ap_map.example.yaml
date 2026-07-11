@@ -1,0 +1,20 @@
+# AP map — EXAMPLE
+#
+# The plot script (plot_wifi_drive.py) uses this to translate BSSIDs from
+# the CSV into friendly names in the plot legend. Copy this file to
+# `ap_map.yaml` next to your CSV (or to ~/ap_map.yaml) and fill in your
+# own BSSIDs. Keys MUST be lowercase, MAC-colon format.
+#
+# Discovery order used by the script:
+#   1. --map <path>
+#   2. $AP_MAP environment variable
+#   3. ap_map.yaml in the same directory as the CSV
+#   4. ~/ap_map.yaml
+#
+# Missing entries fall back to the raw BSSID.
+
+aps:
+  "aa:bb:cc:dd:ee:01": "Living Room (2.4)"
+  "aa:bb:cc:dd:ee:02": "Living Room (5)"
+  "aa:bb:cc:dd:ee:11": "Bedroom (2.4)"
+  "aa:bb:cc:dd:ee:12": "Bedroom (5)"
