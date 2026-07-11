@@ -610,7 +610,6 @@ class WifiDataCollector(Node):
 def main(args=None):
     # import ipdb; ipdb.set_trace()  # Add this line to start the debugger
     rclpy.init(args=args)
-    print("Starting WiFi logger node")
     wifi_data_collector = WifiDataCollector()
 
     try:
