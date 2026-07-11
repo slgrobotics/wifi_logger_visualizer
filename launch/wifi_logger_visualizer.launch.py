@@ -62,7 +62,7 @@ def generate_launch_description():
         description='Topic to read costmap dimensions from'
     )
 
-    ld.add_action([
+    for action in [
         db_path_arg,
         publish_frequency_arg,
         db_check_frequency_arg,
@@ -70,8 +70,9 @@ def generate_launch_description():
         enable_link_quality_arg,
         enable_signal_level_arg,
         enable_bit_rate_arg,
-        costmap_topic_arg
-    ])
+        costmap_topic_arg,
+    ]:
+        ld.add_action(action)
     
     run_logger = LaunchConfiguration('run_logger')
     run_logger_arg = DeclareLaunchArgument(
