@@ -32,3 +32,13 @@
     enable_signal_level: true
     enable_bit_rate: true
     costmap_topic: "/global_costmap/costmap"
+
+/heat_mapper_node:
+  ros__parameters:
+    db_path: "wifi_data.db"
+    publish_frequency: 1.0
+    db_check_frequency: 2.0
+    max_interpolation_distance: 1.0
+    enable_link_quality: true
+    enable_signal_level: true
+    enable_bit_rate: true
