@@ -176,7 +176,6 @@ class WifiVisualizerNode(Node):
             return
 
         self._shutdown_complete = True
-        self.get_logger().info('Shutting down WiFi visualizer node gracefully')
 
         if hasattr(self, 'publish_timer') and self.publish_timer is not None:
             self.publish_timer.cancel()
@@ -366,7 +365,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('Received Ctrl+C, shutting down gracefully')
+        pass
     finally:
         node.shutdown()
         if rclpy.ok():

@@ -616,7 +616,7 @@ def main(args=None):
     try:
         rclpy.spin(wifi_data_collector)
     except KeyboardInterrupt:
-        wifi_data_collector.get_logger().info('Received Ctrl+C, shutting down gracefully')
+        pass
     finally:
         wifi_data_collector.shutdown()
         if rclpy.ok():
