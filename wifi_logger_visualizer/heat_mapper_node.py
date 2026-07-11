@@ -47,7 +47,7 @@ class HeatMapperNode(Node):
         self.declare_parameter('do_publish_text_markers', True)  # Whether to publish text markers
         # Color mapping parameters (names match wifi_logger YAML for shared config)
         self.declare_parameter('min_signal_level', -80.0)  # dBm at cold end of ramp when normalize=False
-        self.declare_parameter('max_signal_level', -50.0)  # dBm at hot end of ramp when normalize=False
+        self.declare_parameter('max_signal_level', -30.0)  # dBm at hot end of ramp when normalize=False
         self.declare_parameter('normalize', True)          # Auto-fit ramp to observed data range
         self.declare_parameter('marker_alpha', 1.0)        # Opacity of cube markers (0..1)
 
