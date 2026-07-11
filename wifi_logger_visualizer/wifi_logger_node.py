@@ -591,13 +591,35 @@ class WifiDataCollector(Node):
             # Sleep briefly before trying again
             rclpy.spin_once(self, timeout_sec=0.1)
 
+    def shutdown(self):
+        """Perform a clean shutdown of the node."""
+        if getattr(self, '_shutdown_complete', False):
+            return
+
+        self._shutdown_complete = True
+
+        if hasattr(self, 'timer') and self.timer is not None:
+            self.timer.cancel()
+
+        if hasattr(self, 'tf_listener'):
+            self.tf_listener = None
+
+        self.destroy_node()
+
+
 def main(args=None):
     # import ipdb; ipdb.set_trace()  # Add this line to start the debugger
     rclpy.init(args=args)
-    print("Starting WiFi logger node")
     wifi_data_collector = WifiDataCollector()
-    rclpy.spin(wifi_data_collector)
-    rclpy.shutdown()
+
+    try:
+        rclpy.spin(wifi_data_collector)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        wifi_data_collector.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

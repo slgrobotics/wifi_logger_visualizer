@@ -170,6 +170,26 @@ class WifiVisualizerNode(Node):
                 self.wait_for_costmap()  # Wait for new costmap dimensions
         return True
 
+    def shutdown(self):
+        """Perform a clean shutdown of the node."""
+        if getattr(self, '_shutdown_complete', False):
+            return
+
+        self._shutdown_complete = True
+
+        if hasattr(self, 'publish_timer') and self.publish_timer is not None:
+            self.publish_timer.cancel()
+        if hasattr(self, 'db_check_timer') and self.db_check_timer is not None:
+            self.db_check_timer.cancel()
+
+        if hasattr(self, 'conn') and self.conn is not None:
+            try:
+                self.conn.close()
+            except sqlite3.Error:
+                pass
+
+        self.destroy_node()
+
     def get_latest_timestamp(self):
         """Get the latest timestamp from the database."""
         try:
@@ -341,9 +361,15 @@ class WifiVisualizerNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = WifiVisualizerNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
