@@ -312,9 +312,15 @@ class HeatMapperNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = HeatMapperNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info('Received Ctrl+C, shutting down gracefully')
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
