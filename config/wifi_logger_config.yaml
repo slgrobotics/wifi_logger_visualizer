@@ -17,8 +17,8 @@
     ov_height_factor: 1.0
     ov_font: "DejaVu Sans Mono"
     ov_font_size: 12.0
-    ov_font_color: "0.1 0.1 0.1 1.0"  # RGBA
-    ov_bg_color: "1.0 1.0 1.0 0.5"   # RGBA
+    ov_font_color: "0.8 0.8 0.3 0.8"  # RGBA
+    ov_bg_color: "0.0 0.0 0.0 0.05"   # RGBA
     ov_do_short: true
     ov_do_full: true
 
@@ -35,10 +35,14 @@
 
 /heat_mapper_node:
   ros__parameters:
+    standalone: false
     db_path: "wifi_data.db"
-    publish_frequency: 1.0
-    db_check_frequency: 2.0
-    max_interpolation_distance: 1.0
-    enable_link_quality: true
-    enable_signal_level: true
-    enable_bit_rate: true
+    costmap_topic: "/global_costmap/costmap"
+    scale_factor: 1.0
+    text_size: 0.08
+    do_publish_markers: true
+    do_publish_text_markers: true
+    min_signal_level: -80.0
+    max_signal_level: -30.0
+    normalize: true
+    marker_alpha: 1.0
