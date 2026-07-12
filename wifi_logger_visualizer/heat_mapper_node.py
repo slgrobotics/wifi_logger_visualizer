@@ -372,7 +372,8 @@ def main(args=None):
     node = HeatMapperNode()
 
     try:
-        rclpy.spin(node)
+        if not node.standalone:
+            rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
