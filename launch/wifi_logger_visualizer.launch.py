@@ -30,10 +30,19 @@ def generate_launch_description():
     )
     ld.add_action(run_visualizer_arg)
     
+    run_heatmapper = LaunchConfiguration('run_heatmapper')
+    run_heatmapper_arg = DeclareLaunchArgument(
+        'run_heatmapper',
+        default_value='True',
+        description='Run the heat mapper node'
+    )
+    ld.add_action(run_heatmapper_arg)
+    
     ld.add_action(LogInfo(msg=["[wifi_logger_visualizer.launch.py] ",
                                " run_logger: ", run_logger,
-                               ", run_visualizer: ", run_visualizer]))
-  
+                               ", run_visualizer: ", run_visualizer,
+                               ", run_heatmapper: ", run_heatmapper]))
+
     # Declare launch arguments for nodes:
     db_path_arg = DeclareLaunchArgument(
         'db_path',
@@ -100,7 +109,12 @@ def generate_launch_description():
         package=package_name,
         executable='wifi_logger_node.py',
         name='wifi_logger_node',
-        parameters=[config_filepath],
+        parameters=[
+            config_filepath,
+            {
+                'db_path': LaunchConfiguration('db_path'),
+            }
+        ],
         # arguments=['--ros-args', '--log-level', 'DEBUG'],
         output='screen'
     )
@@ -127,5 +141,22 @@ def generate_launch_description():
         ]
     )
     ld.add_action(wifi_visualizer_node)
-    
+
+    heat_mapper_node = Node(
+        condition=IfCondition(run_heatmapper),
+        package=package_name,
+        executable='heat_mapper_node.py',
+        name='heat_mapper_node',
+        output='screen',
+        parameters=[
+            config_filepath,
+            {
+                'db_path': LaunchConfiguration('db_path'),
+                'costmap_topic': LaunchConfiguration('costmap_topic')
+            }
+        ]
+    )
+    ld.add_action(heat_mapper_node)
+
+
     return ld
