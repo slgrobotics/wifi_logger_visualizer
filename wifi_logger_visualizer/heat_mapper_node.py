@@ -365,15 +365,19 @@ class HeatMapperNode(Node):
         plt.ylabel('Y-axis Travel')
 
         # Display the heatmap
-        plt.show()
+        try:
+            plt.show(block=True)
+        except KeyboardInterrupt:
+            print("Heatmap display interrupted by user.")
 
 def main(args=None):
     rclpy.init(args=args)
     node = HeatMapperNode()
 
     try:
-        if not node.standalone:
-            rclpy.spin(node)
+        if node.standalone:
+            return # In standalone mode, the heatmap is displayed in GUI and the node does not have to exist.
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
