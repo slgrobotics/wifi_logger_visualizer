@@ -313,12 +313,12 @@ ROS2 Jazzy setup:
 - Raspberry Pi: https://github.com/slgrobotics/robots_bringup/tree/main/Docs/Ubuntu-RPi
 
 For _robot software_ see:
-- My Robots - [Plucky, Dragger, Turtle](https://github.com/slgrobotics/robots_bringup)
+- My Robots - [Seggy, Plucky, Dragger, Turtle](https://github.com/slgrobotics/articubot_one/wiki)
 
 ## License
 
-This package is licensed under the MIT License.
+This package is licensed under the MIT License. Original [code](https://github.com/wimblerobotics/wifi_logger_visualizer) by Michael Wimble
 
 ## Contributions
 
-I'd like to thank Sergei Grichine for his large contributions to this project, especially to the standalone heat map code. Please visit his [github](https://github.com/slgrobotics) and add a star in recognition for his many contributions to robotics.
+Please sibmit a [Pull Request](https://github.com/slgrobotics/wifi_logger_visualizer/pulls) or an [Issue](https://github.com/slgrobotics/wifi_logger_visualizer/issues) if you see anything worth improving.
