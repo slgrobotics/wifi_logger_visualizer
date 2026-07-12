@@ -43,7 +43,7 @@ def generate_launch_description():
         return [Node(
             package='wifi_logger_visualizer',
             executable='heat_mapper_node.py',
-            name='heat_mapper',
+            name='heat_mapper_node',
             parameters=[LaunchConfiguration('params_file'), overrides],
             output='screen',
         )]

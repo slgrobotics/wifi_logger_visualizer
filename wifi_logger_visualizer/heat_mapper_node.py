@@ -44,13 +44,14 @@ class HeatMapperNode(Node):
         self.declare_parameter('costmap_topic', '/global_costmap/costmap')
         self.declare_parameter('scale_factor', 1.0)
         self.declare_parameter('text_size', 0.08)  # Text size in meters
-        self.declare_parameter('do_publish_markers', True)  # Whether to publish value markers
+        self.declare_parameter('do_publish_markers', True)     # Whether to publish value markers
         self.declare_parameter('do_publish_text_markers', True)  # Whether to publish text markers
         # Color mapping parameters (names match wifi_logger YAML for shared config)
-        self.declare_parameter('min_signal_level', -80.0)  # dBm at cold end of ramp when normalize=False
-        self.declare_parameter('max_signal_level', -30.0)  # dBm at hot end of ramp when normalize=False
-        self.declare_parameter('normalize', True)          # Auto-fit ramp to observed data range
-        self.declare_parameter('marker_alpha', 1.0)        # Opacity of cube markers (0..1)
+        self.declare_parameter('min_signal_level', -80.0)      # dBm at cold end of ramp when normalize=False
+        self.declare_parameter('max_signal_level', -30.0)      # dBm at hot end of ramp when normalize=False
+        self.declare_parameter('normalize', True)              # Auto-fit ramp to observed data range
+        self.declare_parameter('marker_alpha', 1.0)            # Opacity of cube markers (0..1)
+        self.declare_parameter('use_redblue_colormap', False)  # smooth red->blue ramp instead of ROYGB rainbow
 
         # Get parameter values
         self.standalone = self.get_parameter('standalone').value
@@ -64,7 +65,8 @@ class HeatMapperNode(Node):
         self.max_signal_level = float(self.get_parameter('max_signal_level').value)
         self.normalize = bool(self.get_parameter('normalize').value)
         self.marker_alpha = float(self.get_parameter('marker_alpha').value)
-
+        self.use_redblue_colormap = bool(self.get_parameter('use_redblue_colormap').value)
+        
         # Log parameter values
         self.get_logger().info(f"Parameter values:")
         self.get_logger().info(f"  costmap_topic: {self.costmap_topic}")
@@ -78,7 +80,8 @@ class HeatMapperNode(Node):
         self.get_logger().info(f"  max_signal_level: {self.max_signal_level} dBm")
         self.get_logger().info(f"  normalize: {self.normalize}")
         self.get_logger().info(f"  marker_alpha: {self.marker_alpha}")
-        
+        self.get_logger().info(f"  use_redblue_colormap: {self.use_redblue_colormap}")
+
         # Initialize costmap dimensions
         self.costmap_resolution = None
         self.costmap_width = None
@@ -253,38 +256,56 @@ class HeatMapperNode(Node):
                 # self.get_logger().info(f'Published {len(text_markers.markers)} text markers')
 
     def _signal_to_color(self, signal_level, lo, hi):
-        """Map a WiFi signal level (dBm) to a saturated ROYGB rainbow ColorRGBA.
+        """Map a WiFi signal level (dBm) to a saturated ROYGB rainbow ColorRGBA
+          or a smooth red->blue ramp, based on the configured or observed range."""
 
-        Interpolates linearly across 5 stops (red, orange, yellow, green, blue)
-        so weak signals are red and strong signals are blue, with no muddy
-        midtones. ``lo``/``hi`` set the dBm values that map to the ramp
-        endpoints (either fixed config or per-cycle data min/max).
-        """
+        color = ColorRGBA()
+        color.a = self.marker_alpha
+
         if hi <= lo:
             t = 0.5
         else:
             t = (float(signal_level) - lo) / (hi - lo)
         t = max(0.0, min(1.0, t))
 
-        # ROYGB stops, weak (red) -> strong (blue)
-        stops = (
-            (1.0, 0.0, 0.0),  # red
-            (1.0, 0.5, 0.0),  # orange
-            (1.0, 1.0, 0.0),  # yellow
-            (0.0, 1.0, 0.0),  # green
-            (0.0, 0.0, 1.0),  # blue
-        )
-        n = len(stops) - 1
-        seg = min(int(t * n), n - 1)
-        frac = t * n - seg
-        r0, g0, b0 = stops[seg]
-        r1, g1, b1 = stops[seg + 1]
+        if self.use_redblue_colormap:
+            
+            """Interpolates smoothly from red (weak) to blue (strong) using a simple linear ramp.
+              ``lo``/``hi`` set the dBm values that map to the ramp endpoints
+              (either fixed config or per-cycle data min/max)."""
+            # Red->Blue scale, weak (red) -> strong (blue)
+            r = 1.0 - t
+            g = 0.0
+            b = t
 
-        color = ColorRGBA()
-        color.r = r0 + (r1 - r0) * frac
-        color.g = g0 + (g1 - g0) * frac
-        color.b = b0 + (b1 - b0) * frac
-        color.a = self.marker_alpha
+            color.r = r
+            color.g = g
+            color.b = b
+        
+        else:
+            """Interpolates linearly across 5 stops (red, orange, yellow, green, blue)
+            so weak signals are red and strong signals are blue, with no muddy
+            midtones. ``lo``/``hi`` set the dBm values that map to the ramp
+            endpoints (either fixed config or per-cycle data min/max).
+            """
+            # ROYGB stops, weak (red) -> strong (blue)
+            stops = (
+                (1.0, 0.0, 0.0),  # red
+                (1.0, 0.5, 0.0),  # orange
+                (1.0, 1.0, 0.0),  # yellow
+                (0.0, 1.0, 0.0),  # green
+                (0.0, 0.0, 1.0),  # blue
+            )
+            n = len(stops) - 1
+            seg = min(int(t * n), n - 1)
+            frac = t * n - seg
+            r0, g0, b0 = stops[seg]
+            r1, g1, b1 = stops[seg + 1]
+
+            color.r = r0 + (r1 - r0) * frac
+            color.g = g0 + (g1 - g0) * frac
+            color.b = b0 + (b1 - b0) * frac
+
         return color
 
     def create_standalone_heatmap(self):
@@ -358,12 +379,13 @@ class HeatMapperNode(Node):
         vmax = hd_max if self.normalize else self.max_signal_level
         self._fig = plt.figure(figsize=(10, 8))
         # 'turbo_r' gives a perceptually smooth ROYGB rainbow (red=weak -> blue=strong)
-        ax = sns.heatmap(heat_data, annot=True, cmap='turbo_r', fmt=".0f", linewidths=.2, vmin=vmin, vmax=vmax)
+        _cmap = 'coolwarm' if self.use_redblue_colormap else 'turbo_r'
+        ax = sns.heatmap(heat_data, annot=True, cmap=_cmap, fmt=".0f", linewidths=.2, vmin=vmin, vmax=vmax)
         # https://seaborn.pydata.org/tutorial/color_palettes.html
         ax.invert_yaxis()
 
         # Customize the plot (optional)
-        plt.title('WiFi Signal Strength Heatmap')
+        plt.title('WiFi Signal Strength Heatmap (dBm)')
         plt.xlabel('X-axis Travel')
         plt.ylabel('Y-axis Travel')
 
