@@ -14,6 +14,7 @@ from rclpy.time import Time
 from rclpy.duration import Duration
 import copy
 import os
+import signal
 from ament_index_python.packages import get_package_share_directory
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -82,6 +83,8 @@ class HeatMapperNode(Node):
         self.costmap_resolution = None
         self.costmap_width = None
         self.costmap_height = None
+        self._shutdown_requested = False
+        self._fig = None
         
         if not self.standalone:
             # Wait for costmap topic
@@ -106,8 +109,8 @@ class HeatMapperNode(Node):
             # Create timer for periodic updates
             self.timer = self.create_timer(1.0, self.timer_callback)
         else:
-            # Create matplotlib heatmap
-            self.create_heatmap()
+            # Create matplotlib heatmap - pop-up window for standalone mode
+            self.create_standalone_heatmap()
         
     def wait_for_costmap(self):
         """Wait for the first costmap message to get dimensions."""
@@ -284,7 +287,7 @@ class HeatMapperNode(Node):
         color.a = self.marker_alpha
         return color
 
-    def create_heatmap(self):
+    def create_standalone_heatmap(self):
         """Create a matplotlib heatmap from the database data."""
         try:
             conn = sqlite3.connect(self.db_path)
@@ -353,7 +356,7 @@ class HeatMapperNode(Node):
         # Use configured window when normalize=False, otherwise stretch to observed range.
         vmin = hd_min if self.normalize else self.min_signal_level
         vmax = hd_max if self.normalize else self.max_signal_level
-        plt.figure(figsize=(10, 8))
+        self._fig = plt.figure(figsize=(10, 8))
         # 'turbo_r' gives a perceptually smooth ROYGB rainbow (red=weak -> blue=strong)
         ax = sns.heatmap(heat_data, annot=True, cmap='turbo_r', fmt=".0f", linewidths=.2, vmin=vmin, vmax=vmax)
         # https://seaborn.pydata.org/tutorial/color_palettes.html
@@ -364,22 +367,35 @@ class HeatMapperNode(Node):
         plt.xlabel('X-axis Travel')
         plt.ylabel('Y-axis Travel')
 
-        # Display the heatmap
+        # Display the heatmap without blocking the Python process so SIGINT can be handled.
         try:
-            plt.show(block=True)
+            signal.signal(signal.SIGINT, self.handle_sigint)
+            plt.show(block=False)
+            while not self._shutdown_requested and plt.get_fignums():
+                plt.pause(0.1)
         except KeyboardInterrupt:
             print("Heatmap display interrupted by user.")
+        finally:
+            if self._fig is not None:
+                plt.close(self._fig)
+                self._fig = None
+
+    def handle_sigint(self, signum, frame):
+        self._shutdown_requested = True
+        print("Received SIGINT, shutting down heat mapper.")
 
 def main(args=None):
+
     rclpy.init(args=args)
     node = HeatMapperNode()
 
+    if node.standalone:
+        return  # no need to spin in standalone mode; matplotlib loop handles Ctrl/C (SIGINT)
+
     try:
-        if node.standalone:
-            return # In standalone mode, the heatmap is displayed in GUI and the node does not have to exist.
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        print("Received SIGINT, shutting down heat mapper.")
     finally:
         node.destroy_node()
         if rclpy.ok():
