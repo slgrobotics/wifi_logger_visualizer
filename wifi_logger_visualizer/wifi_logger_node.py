@@ -208,12 +208,27 @@ class WifiDataCollector(Node):
             return None
 
     def create_table(self):
-        """Create the database table with proper constraints and indices."""
+        """Create the wifi_data table and its indices if they do not yet exist."""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Create table with proper constraints
+            # No SQL CHECK constraints on data columns. Python-side
+            # validate_data() is authoritative for the value ranges, and
+            # those bounds are operator-tunable via
+            # min_signal_strength / max_signal_strength in YAML. Encoding
+            # the same bounds a second time in SQL introduces drift: rows
+            # accepted by validate_data() but outside the hardcoded CHECK
+            # range get silently rejected at INSERT time.
+            #
+            # CREATE TABLE IF NOT EXISTS does not touch an existing
+            # schema, so a database created by an earlier version of this
+            # node still carries the legacy CHECK constraints. That is
+            # harmless in itself (INSERT just raises sqlite3.Error, which
+            # the caller now logs and skips), but operators who want to
+            # tune the acceptance window outside the legacy range
+            # (-90..-30 dBm on signal_level, >= 0 on bit_rate,
+            # 0..1 on link_quality) must recreate the DB.
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS wifi_data (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,9 +241,9 @@ class WifiDataCollector(Node):
                     alt REAL NULL,
                     gps_status INT NULL,
                     gps_service INT NULL,
-                    bit_rate REAL CHECK (bit_rate >= 0),
-                    link_quality REAL CHECK (link_quality >= 0 AND link_quality <= 1),
-                    signal_level REAL CHECK (signal_level >= -90.0 AND signal_level <= -30.0),
+                    bit_rate REAL,
+                    link_quality REAL,
+                    signal_level REAL,
                     UNIQUE(x, y, z, timestamp)
                 )
             """)
@@ -265,10 +280,11 @@ class WifiDataCollector(Node):
         if not self.validate_data(bit_rate, link_quality, signal_level):
             return
 
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+
             # Check if we already have data for this location
             cursor.execute("""
                 SELECT id FROM wifi_data 
@@ -294,15 +310,20 @@ class WifiDataCollector(Node):
                 """, (self.x, self.y, self.z, self.latitude, self.longitude, self.altitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
                 #self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.altitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
             conn.commit()
-            conn.close()
-            
+
         except sqlite3.Error as e:
+            # Do NOT call self.create_table() here. Constraint/data failures
+            # are not schema corruption; recreating the table cannot fix
+            # them, and opening a second connection while the failed one
+            # still holds a RESERVED lock cascades into 'database is
+            # locked' on every subsequent tick.
             self.get_logger().error(f"Error inserting data: {e}")
-            # Try to recover by recreating the table
-            try:
-                self.create_table()
-            except sqlite3.Error as e2:
-                self.get_logger().error(f"Failed to recover from database error: {e2}")
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    pass
 
     def cleanup_old_data(self, max_age_days: int = 30):
         """Remove data older than specified days."""
@@ -340,6 +361,8 @@ class WifiDataCollector(Node):
                     bit_rate *= 1000  # Convert Gb/s to Mb/s
             else:
                 bit_rate = None
+                self.get_logger().debug(
+                    "iwconfig did not report Bit Rate; skipping tick")
 
             # Extract link quality
             link_quality_match = re.search(r"Link Quality=(?P<link_quality>\d+/\d+)", self.iwconfig_output)
@@ -348,16 +371,36 @@ class WifiDataCollector(Node):
                 link_quality = float(link_quality_str.split('/')[0]) / float(link_quality_str.split('/')[1])
             else:
                 link_quality = None
+                self.get_logger().debug(
+                    "iwconfig did not report Link Quality; skipping tick")
 
-            # Extract and validate signal level
-            signal_level_match = re.search(r"Signal level[:=](?P<signal_level>-?\d+) dBm", self.iwconfig_output)
-            if signal_level_match:
-                signal_level = float(signal_level_match.group("signal_level"))
-                # Validate signal level is within expected range
-                if not (self.min_signal_strength <= signal_level <= self.max_signal_strength):
-                    self.get_logger().warn(f"Signal level {signal_level} dBm outside expected range")
+            # Extract and validate signal level.
+            # NOTE: rtl88xx-family USB dongles (and some others) periodically
+            # return "Signal level=0 dBm" from the kernel's WEXT/nl80211
+            # cache when no fresh beacon has arrived between our poll and
+            # the driver's own update tick. It is a sentinel for "no data",
+            # not a real reading. We retry iwconfig once immediately (the
+            # next sample is almost always valid), and if it is still 0 we
+            # silently return None so the timer_callback just skips this
+            # tick without WARN-flooding.
+            signal_level = self._parse_signal_level(self.iwconfig_output)
+            if signal_level == 0.0:
+                try:
+                    retry_output = subprocess.check_output(
+                        ["iwconfig", self.wifi_interface]).decode("utf-8")
+                    self.iwconfig_output = retry_output
+                    signal_level = self._parse_signal_level(retry_output)
+                except subprocess.CalledProcessError:
+                    pass
+                if signal_level == 0.0:
+                    self.get_logger().debug(
+                        "Signal level 0 dBm (driver sentinel) after retry; "
+                        "skipping this tick")
                     signal_level = None
-            else:
+            if signal_level is not None and not (
+                    self.min_signal_strength <= signal_level <= self.max_signal_strength):
+                self.get_logger().warn(
+                    f"Signal level {signal_level} dBm outside expected range")
                 signal_level = None
 
             return bit_rate, link_quality, signal_level
@@ -368,6 +411,14 @@ class WifiDataCollector(Node):
         except Exception as e:
             self.get_logger().error(f"Unexpected error getting WiFi data: {e}")
             return None, None, None
+
+    def _parse_signal_level(self, iwconfig_output):
+        """Return the signal level in dBm from an iwconfig block, or None."""
+        m = re.search(r"Signal level[:=](?P<signal_level>-?\d+) dBm",
+                      iwconfig_output)
+        if not m:
+            return None
+        return float(m.group("signal_level"))
 
     def publish_wifi_data(self, bit_rate, link_quality, signal_level):
         try:
@@ -563,23 +614,34 @@ class WifiDataCollector(Node):
         self.x, self.y, self.z = tuple(round(x, self.grid_density) for x in self.current_pose)
         bit_rate, link_quality, signal_level = self.get_wifi_data()
 
+        # Gate publish + insert on all three fields being valid. iwconfig can
+        # emit a spurious "Signal level=0 dBm" during brief loss of beacons,
+        # which the acceptance filter drops to None (get_wifi_data retries
+        # once). Passing None into Float32MultiArray.data raises "must be
+        # real number, not NoneType" (see publish_wifi_data /
+        # publish_wifi_overlay). Skips are logged at debug because the
+        # underlying reason (driver-sentinel 0 dBm, or a parse miss) was
+        # already logged inside get_wifi_data; WARN is reserved for
+        # genuinely unexpected states (out-of-range, subprocess error).
+        if not all(v is not None for v in (bit_rate, link_quality, signal_level)):
+            self.get_logger().debug(
+                "Could not retrieve all WiFi data, skipping insertion")
+            return
+
         if self.do_publish_metrics:
             self.publish_wifi_data(bit_rate, link_quality, signal_level)
-        
+
         if self.do_publish_overlay:
             self.publish_wifi_overlay(bit_rate, link_quality, signal_level, self.iwconfig_output)
-        
-        if all(v is not None for v in [bit_rate, link_quality, signal_level]):
-            self.insert_data(bit_rate, link_quality, signal_level)
-            self.get_logger().debug(
-                f"X: {self.x}, Y: {self.y}, Z: {self.z}, "
-                f"Bit Rate: {bit_rate} Mb/s, "
-                f"Link Quality: {link_quality:.2f}, "
-                f"Signal Level: {signal_level} dBm"
-            )
-        else:
-            self.get_logger().warn("Could not retrieve all WiFi data, skipping insertion")
-        
+
+        self.insert_data(bit_rate, link_quality, signal_level)
+        self.get_logger().debug(
+            f"X: {self.x}, Y: {self.y}, Z: {self.z}, "
+            f"Bit Rate: {bit_rate} Mb/s, "
+            f"Link Quality: {link_quality:.2f}, "
+            f"Signal Level: {signal_level} dBm"
+        )
+
         # Clean up old data once per day
         # if self.get_clock().now().nanoseconds % (24 * 60 * 60 * 1e9) < self.update_interval * 1e9:
         #     self.cleanup_old_data()
