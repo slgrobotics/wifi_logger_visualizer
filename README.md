@@ -240,12 +240,29 @@ To view the cost maps in rviz2:
    - `/wifi_signal_level_costmap`
    - `/wifi_bit_rate_costmap`
 
+### Working with GPS outdoors
+
+For robots with GPS set parameter `use_gps: true` (usually in YAML configuration file)
+
+This is how the survey looks like for my Dragger robot:
+
+<img width="1953" height="1740" alt="Screenshot from 2026-07-15 18-07-57" src="https://github.com/user-attachments/assets/438371ce-9f5a-4aa6-9fc9-def2e7cf3004" />
+
+And when zoomed in:
+
+<img width="1953" height="1740" alt="Screenshot from 2026-07-15 18-10-49" src="https://github.com/user-attachments/assets/981eb3f6-b520-4241-aa1b-5b4bb93b5067" />
+
 ## Database Schema
 
 The SQLite database contains a table with the following columns:
 - `timestamp`: When the data was collected
 - `x`: X coordinate in meters
 - `y`: Y coordinate in meters
+- `lat`: GPS latitude
+- `lon`: GPS longitude
+- `alt`: GPS altitude
+- `gps_status`: -2 Unknown, -1 No Fix, 0 Fix, 1 Fix + Sat Augm, 2 Fix + Ground Augm
+- `gps_service`: Bitmask: 0 GPS, 1 GLONASS, 2 BeiDou, 3 Galileo
 - `bit_rate`: WiFi bit rate in Mb/s
 - `link_quality`: Link quality (0-1)
 - `signal_level`: Signal level in dBm
