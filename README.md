@@ -242,7 +242,7 @@ To view the cost maps in rviz2:
 
 ### Working with GPS outdoors
 
-For robots with GPS set parameter `use_gps: true` (usually in YAML configuration file)
+For robots with GPS set parameter `use_gps: true` (usually in YAML configuration file). Your robot should publish `/gps/filtered` (*NavSatFix* message type)
 
 This is how the survey looks like for my Dragger robot:
 
@@ -258,9 +258,10 @@ The SQLite database contains a table with the following columns:
 - `timestamp`: When the data was collected
 - `x`: X coordinate in meters
 - `y`: Y coordinate in meters
-- `lat`: GPS latitude
-- `lon`: GPS longitude
-- `alt`: GPS altitude
+- `z`: Z coordinate in meters
+- `lat`: GPS latitude (degrees, WGS 84)
+- `lon`: GPS longitude (degrees, WGS 84)
+- `alt`: GPS altitude, meters, as reported by `/gps/filtered` topic (positive above the WGS 84 ellipsoid).
 - `gps_status`: -2 Unknown, -1 No Fix, 0 Fix, 1 Fix + Sat Augm, 2 Fix + Ground Augm
 - `gps_service`: Bitmask: 0 GPS, 1 GLONASS, 2 BeiDou, 3 Galileo
 - `bit_rate`: WiFi bit rate in Mb/s
