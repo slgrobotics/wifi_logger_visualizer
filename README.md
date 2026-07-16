@@ -163,7 +163,9 @@ The logger node collects WiFi data at the robot's current position:
 ros2 launch wifi_logger_visualizer wifi_logger.launch.py
 ```
 
-Parameters:
+Parameters (see [wifi_logger_config.yaml](https://github.com/slgrobotics/wifi_logger_visualizer/blob/main/config/wifi_logger_config.yaml)):
+- `use_gps`: Set *false* on robots without a GPS receiver (skips subscribing to `/gps/filtered` and "*GPS stale*" warnings)
+- `grid_density` rounding factor for x,y,z coordinates, 1 means 0.1 meter grid (usually indoors), 0 means 1 meter grid (usually outdoors)
 - `db_path`: Path to the SQLite database file (default: `wifi_data.db` in current directory)
 - `wifi_interface`: WiFi interface name (default: auto-detect)
 - `update_interval`: How often to collect data in seconds (default: 1.0)
@@ -171,15 +173,28 @@ Parameters:
 - `min_signal_strength`: Minimum expected signal strength in dBm (default: -90.0)
 - `publish_metrics`: if True, logger will publish `/wifi/metrics` topic of type _Float32MultiArray_ (default: True)
 - `publish_overlay`: if True, logger will publish `/wifi/overlay` topic of type _OverlayText_ (default: True)
+>**RViz2 overlay parameters** (viewing `/wifi/overlay` topic):
+- `ov_horizontal_alignment`: 2  # LEFT:0 RIGHT:1 CENTER:2
+- `ov_vertical_alignment`: 3    # CENTER:2 TOP:3 Bottom:4
+- `ov_horizontal_distance`: 10
+- `ov_vertical_distance`: 10
+- `ov_width_factor`: 1.0
+- `ov_height_factor`: 1.0
+- `ov_font`: "DejaVu Sans Mono"
+- `ov_font_size`: 12.0
+- `ov_font_color`: "0.1 0.1 0.1 1.0"  # RGBA
+- `ov_bg_color`: "1.0 1.0 1.0 0.5"    # RGBA
+- `ov_do_short`: true
+- `ov_do_full`: true
 
 Signal strength is expected to be in the range of -90 dBm (weak) to -30 dBm (strong). The logger will only collect data within this range.
 
-The `/wifi/metrics` topic with *[bit_rate, link_quality, signal_level]* array can be used, for example, for avoiding areas with weaker WiFi reception.
+The published `/wifi/metrics` topic with *[bit_rate, link_quality, signal_level]* array can be used, for example, for avoiding areas with weaker WiFi reception.
 
-The `/wifi/overlay` topic can be used by RViz2 to view complete information about the connection, using [rviz_2d_overlay_plugins package](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins).
+The published `/wifi/overlay` topic can be used by RViz2 to view complete information about the connection, using [rviz_2d_overlay_plugins package](https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins).
 
 **Note:** the Logger's overlay may conflict with [Battery Display](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/Sensors/BatteryStateBroadcaster.md#displaying-battery-state-data-in-rviz2) - 
-they are both configured by default to reside in upper left corner of RViz2. Resolve this conflict by modifying *vertical_distance* value.
+they are both configured by default to reside in upper left corner of RViz2. Resolve this conflict by modifying `ov_vertical_distance` or `ov_horizontal_alignment` value.
 
 ### WiFi Visualizer Node
 
@@ -189,7 +204,7 @@ The visualizer node creates cost maps from the collected data:
 ros2 launch wifi_logger_visualizer wifi_visualizer.launch.py
 ```
 
-Parameters:
+Parameters (see [wifi_logger_config.yaml](https://github.com/slgrobotics/wifi_logger_visualizer/blob/main/config/wifi_logger_config.yaml)):
 - `db_path`: Path to the SQLite database file (default: `wifi_data.db` in current directory)
 - `publish_frequency`: How often to publish cost maps in Hz (default: 1.0)
 - `db_check_frequency`: How often to check for database updates in Hz (default: 2.0)
@@ -207,7 +222,7 @@ The heat mapper node provides alternative visualization options:
 ros2 launch wifi_logger_visualizer heat_mapper.launch.py
 ```
 
-Parameters:
+Parameters (see [wifi_logger_config.yaml](https://github.com/slgrobotics/wifi_logger_visualizer/blob/main/config/wifi_logger_config.yaml)):
 - `standalone`: Whether to display matplotlib visualization (true) or publish markers (false) (default: false)
 - `db_path`: Path to the SQLite database file (default: **wifi_data.db** in current directory)
 - `scale_factor`: Scale factor for the heat map visualization (default: 1.0)
@@ -215,6 +230,14 @@ Parameters:
 - `do_publish_markers`: Whether to publish value markers (default: true). Markers are published to the **/wifi_heat_markers** topic.
 - `do_publish_text_markers`: Whether to publish text markers (default: true) Markers are published to the **/wifi_heat_text_markers** topic.
 - `use_redblue_colormap`: use smooth *red->blue* ramp instead of more contrast ROYGB rainbow colormap.
+- `costmap_topic`: "/global_costmap/costmap"
+- `min_signal_level`: -80.0
+- `max_signal_level`: -30.0
+> When `normalize` is true, the RViz color ramp is auto-fit to the observed min/max signal in the current data set each publish cycle.
+> When false, the fixed min_signal_level / max_signal_level window above is used.
+- `normalize`: true
+- `marker_alpha`: opacity of cube markers (0..1)
+- `use_redblue_colormap`: enables smooth *red->blue* ramp instead of high contrast ROYGB rainbow
 
 The heat mapper node can operate in two modes:
 1. **Standalone Mode**: Displays a matplotlib heat map with signal strength values
@@ -225,22 +248,21 @@ The heat mapper node can operate in two modes:
      - **/wifi_heat_markers**: Color-coded value markers
      -  **/wifi_heat_text_markers**: Text annotations with signal values
 
-## Viewing the Cost maps
+## Viewing the data as "Cost Maps"
 
-To view the cost maps in rviz2:
+To view the collected data as "cost maps" in rviz2:
 
 1. Launch rviz2:
    ```bash
    rviz2
    ```
-
 2. Add an OccupancyGrid display
 3. Set the topic to one of:
    - `/wifi_link_quality_costmap`
    - `/wifi_signal_level_costmap`
    - `/wifi_bit_rate_costmap`
 
-### Working with GPS outdoors
+## Working with GPS outdoors
 
 For robots with GPS set parameter `use_gps: true` (usually in YAML configuration file). Your robot should publish `/gps/filtered` (*NavSatFix* message type)
 
@@ -251,6 +273,10 @@ This is how the survey looks like for my Dragger robot:
 And when zoomed in:
 
 <img width="1953" height="1740" alt="Screenshot from 2026-07-15 18-10-49" src="https://github.com/user-attachments/assets/981eb3f6-b520-4241-aa1b-5b4bb93b5067" />
+
+**Tips:**
+- set `grid_density` parameter to 0 for 1 meter grid, or to -1 for 10 meter grid
+- typically an outdoors robot will use [Travel router](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/Sensors/WiFi_Logger_Visualizer.md#wifi-6-mesh-networks-and-travel-routers) for better connectivity. The RPi WiFi *wlan0* should be enabled to allow signal strength measurement, while the traffic will go through *eth0* interface.
 
 ## Database Schema
 
