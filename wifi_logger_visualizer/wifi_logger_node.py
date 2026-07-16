@@ -214,6 +214,7 @@ class WifiDataCollector(Node):
                     y REAL NOT NULL,
                     lat REAL NULL,
                     lon REAL NULL,
+                    alt REAL NULL,
                     gps_status INT NULL,
                     gps_service INT NULL,
                     bit_rate REAL CHECK (bit_rate >= 0),
@@ -226,7 +227,7 @@ class WifiDataCollector(Node):
             # Create indices for better query performance
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON wifi_data(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_coordinates ON wifi_data(x, y)")
-            
+
             conn.commit()
             conn.close()
             self.get_logger().info(f"Database table created/verified successfully at {self.db_path}")
@@ -279,10 +280,10 @@ class WifiDataCollector(Node):
             else:
                 # Insert new record
                 cursor.execute("""
-                    INSERT INTO wifi_data (x, y, lat, lon, gps_status, gps_service, bit_rate, link_quality, signal_level)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (self.x, self.y, self.latitude, self.longitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
-                #self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
+                    INSERT INTO wifi_data (x, y, lat, lon, alt, gps_status, gps_service, bit_rate, link_quality, signal_level)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (self.x, self.y, self.latitude, self.longitude, self.altitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
+                #self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.altitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
             conn.commit()
             conn.close()
             
