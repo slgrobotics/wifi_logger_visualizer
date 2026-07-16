@@ -35,6 +35,7 @@ class WifiDataCollector(Node):
         self.declare_parameter('db_path', os.path.join(os.getcwd(), 'wifi_data.db'))
         self.declare_parameter('wifi_interface', '')  # Empty string means auto-detect
         self.declare_parameter('update_interval', 1.0)
+        self.declare_parameter('grid_density', 1)  # rounding factor for x,y,z coordinates, 1 means 0.1 meter grid, 0 means 1 meter grid
         self.declare_parameter('max_signal_strength', -30.0)  # dBm
         self.declare_parameter('min_signal_strength', -90.0)  # dBm
 
@@ -65,6 +66,13 @@ class WifiDataCollector(Node):
         self.update_interval = self.get_parameter('update_interval').value
         self.max_signal_strength = self.get_parameter('max_signal_strength').value
         self.min_signal_strength = self.get_parameter('min_signal_strength').value
+        raw_grid_density = int(self.get_parameter('grid_density').value)
+        if raw_grid_density > 1:
+            self.grid_density = 1   # Allow 0 or 1 for grid density (0 = 1 meter grid, 1 = 0.1 meter grid)
+        elif raw_grid_density < -1:
+            self.grid_density = -1  # Allow negative values for rounding to tens (10 meter grid)
+        else:
+            self.grid_density = raw_grid_density # -1, 0, 1 allowed
 
         # What to publish:
         self.do_publish_metrics = self.get_parameter('publish_metrics').value
@@ -212,6 +220,7 @@ class WifiDataCollector(Node):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     x REAL NOT NULL,
                     y REAL NOT NULL,
+                    z REAL NOT NULL,
                     lat REAL NULL,
                     lon REAL NULL,
                     alt REAL NULL,
@@ -220,13 +229,13 @@ class WifiDataCollector(Node):
                     bit_rate REAL CHECK (bit_rate >= 0),
                     link_quality REAL CHECK (link_quality >= 0 AND link_quality <= 1),
                     signal_level REAL CHECK (signal_level >= -90.0 AND signal_level <= -30.0),
-                    UNIQUE(x, y, timestamp)
+                    UNIQUE(x, y, z, timestamp)
                 )
             """)
             
             # Create indices for better query performance
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON wifi_data(timestamp)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_coordinates ON wifi_data(x, y)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_coordinates ON wifi_data(x, y, z)")
 
             conn.commit()
             conn.close()
@@ -263,9 +272,9 @@ class WifiDataCollector(Node):
             # Check if we already have data for this location
             cursor.execute("""
                 SELECT id FROM wifi_data 
-                WHERE x = ? AND y = ? 
+                WHERE x = ? AND y = ? AND z = ?
                 ORDER BY timestamp DESC LIMIT 1
-            """, (self.x, self.y))
+            """, (self.x, self.y, self.z))
             
             existing_record = cursor.fetchone()
             
@@ -280,9 +289,9 @@ class WifiDataCollector(Node):
             else:
                 # Insert new record
                 cursor.execute("""
-                    INSERT INTO wifi_data (x, y, lat, lon, alt, gps_status, gps_service, bit_rate, link_quality, signal_level)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (self.x, self.y, self.latitude, self.longitude, self.altitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
+                    INSERT INTO wifi_data (x, y, z, lat, lon, alt, gps_status, gps_service, bit_rate, link_quality, signal_level)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (self.x, self.y, self.z, self.latitude, self.longitude, self.altitude, self.gps_status, self.gps_service, bit_rate, link_quality, signal_level))
                 #self.get_logger().info(f"Inserted new record: {self.x}, {self.y}, {self.latitude}, {self.longitude}, {self.altitude}, {self.gps_status}, {self.gps_service}, {bit_rate}, {link_quality}, {signal_level}")
             conn.commit()
             conn.close()
@@ -390,7 +399,7 @@ class WifiDataCollector(Node):
 
             msg.text = "<pre>"
             if self.ov_do_short:
-                msg.text += f"({self.x},{self.y})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
+                msg.text += f"({self.x},{self.y},{self.z})  Bit Rate: {bit_rate}  Quality: {link_quality}  db: {signal_level}\n"
                 msg.text += f"({self.latitude}, {self.longitude}, {self.altitude})  {self.gps_status_str()}  {self.gps_service_str()}\n"
                 nlines += 2
             if self.ov_do_full:
@@ -449,7 +458,11 @@ class WifiDataCollector(Node):
 
                 # Transform the pose to the map frame
                 transformed_pose = do_transform_pose(odom_pose.pose, transform)
-                self.current_pose = (transformed_pose.position.x, transformed_pose.position.y)
+                self.current_pose = (
+                    transformed_pose.position.x,
+                    transformed_pose.position.y,
+                    transformed_pose.position.z,
+                )
                 
                 if not self.transform_available:
                     self.transform_available = True
@@ -459,7 +472,7 @@ class WifiDataCollector(Node):
                 # Transform not available yet, use odometry frame directly
                 if not self.transform_available:
                     self.current_pose = None
-                    # self.current_pose = (odom_pose.pose.position.x, odom_pose.pose.position.y)
+                    # self.current_pose = (odom_pose.pose.position.x, odom_pose.pose.position.y, odom_pose.pose.position.z)
                     # self.get_logger().warn("Using odometry frame directly, transform not available yet")
                 else:
                     pass
@@ -544,7 +557,10 @@ class WifiDataCollector(Node):
                 self.get_logger().warning(f"GPS: data too old, status: {self.gps_status_str()}  service: {self.gps_service_str()}")
                 self.gps_unavailable() # last GPS was more than 2 seconds ago, mark it invalid
 
-        self.x, self.y = tuple(round(x, 1) for x in self.current_pose) # let's work on a 0.1 meter grid 
+        # if self.grid_density = 1, values are rounded to 1 decimal place, which is roughly a 0.1 m grid in 3D space (usually indoors)
+        # if self.grid_density = 0, values are rounded to whole numbers (1 meter grid, usually outdoors)
+        # if self.grid_density = -1, values are rounded to nearest 10 (10 meter coarse grid, usually outdoors)
+        self.x, self.y, self.z = tuple(round(x, self.grid_density) for x in self.current_pose)
         bit_rate, link_quality, signal_level = self.get_wifi_data()
 
         if self.do_publish_metrics:
@@ -556,7 +572,7 @@ class WifiDataCollector(Node):
         if all(v is not None for v in [bit_rate, link_quality, signal_level]):
             self.insert_data(bit_rate, link_quality, signal_level)
             self.get_logger().debug(
-                f"X: {self.x}, Y: {self.y}, "
+                f"X: {self.x}, Y: {self.y}, Z: {self.z}, "
                 f"Bit Rate: {bit_rate} Mb/s, "
                 f"Link Quality: {link_quality:.2f}, "
                 f"Signal Level: {signal_level} dBm"

@@ -1,9 +1,10 @@
 /wifi_logger_node:
   ros__parameters:
-    use_gps: false  # Set false on robots without a GPS receiver (skips /gps/filtered sub + stale warnings)
+    use_gps: false  # Set false on robots without a GPS receiver (skips /gps/filtered sub + "GPS stale" warnings)
     db_path: "wifi_data.db"
     wifi_interface: ""  # Leave empty for auto-detection
     update_interval: 1.0
+    grid_density: 1     # rounding factor for x,y,z coordinates, 1 means 0.1 meter grid (usually indoors), 0 means 1 meter grid (usually outdoors)
     max_signal_strength: -30.0
     min_signal_strength: -90.0
     publish_metrics: true
