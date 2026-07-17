@@ -167,7 +167,7 @@ Parameters (see [wifi_logger_config.yaml](https://github.com/slgrobotics/wifi_lo
 - `use_gps`: Set *false* on robots without a GPS receiver (skips subscribing to `/gps/filtered` and "*GPS stale*" warnings)
 - `grid_density` rounding factor for x,y,z coordinates, 1 means 0.1 meter grid (usually indoors), 0 means 1 meter grid (usually outdoors)
 - `db_path`: Path to the SQLite database file (default: `wifi_data.db` in current directory)
-- `db_clear_on_start`: Whether to delete all existing records from the SQLite database when the logger node starts. Default: `false`.
+- `db_clear_on_start`: Whether to delete all existing records from the SQLite database when the logger node starts. Default: `false`
 - `wifi_interface`: WiFi interface name (default: auto-detect)
 - `update_interval`: How often to collect data in seconds (default: 1.0)
 - `max_signal_strength`: Maximum expected signal strength in dBm (default: -30.0)
@@ -352,6 +352,9 @@ WiFi heatmapping software for iOS and Android (just for reference, I haven't use
 - [WiFi Heatmap](https://play.google.com/store/apps/details?id=ua.com.wifisolutions.wifiheatmap&hl=en_US&pli=1)
 - [ekahau WiFi Heatmaps](https://www.ekahau.com/solutions/wi-fi-heatmaps/)
 - [NetSpot](https://www.netspotapp.com/wifi-heat-map/best-wifi-heatmap-software.html)  (available for [iOS](https://apps.apple.com/us/app/netspot-wifi-analyzer/id1490247223))
+
+WiFi mapping using *[rtabmap_ros](https://github.com/introlab/rtabmap_ros)* visual SLAM package:
+- https://wiki.ros.org/rtabmap_ros/Tutorials/WifiSignalStrengthMappingUserDataUsage
 
 ROS2 Jazzy setup:
 - Intel Desktop: https://github.com/slgrobotics/robots_bringup/tree/main/Docs/ROS-Jazzy
