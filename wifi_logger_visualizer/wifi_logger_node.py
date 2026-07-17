@@ -33,6 +33,7 @@ class WifiDataCollector(Node):
         
         # Declare and get parameters
         self.declare_parameter('db_path', os.path.join(os.getcwd(), 'wifi_data.db'))
+        self.declare_parameter('db_clear_on_start', False)
         self.declare_parameter('wifi_interface', '')  # Empty string means auto-detect
         self.declare_parameter('update_interval', 1.0)
         self.declare_parameter('grid_density', 1)  # rounding factor for x,y,z coordinates, 1 means 0.1 meter grid, 0 means 1 meter grid
@@ -62,6 +63,7 @@ class WifiDataCollector(Node):
 
         # Get parameter values
         self.db_path = self.get_parameter('db_path').value
+        self.db_clear_on_start = self.get_parameter('db_clear_on_start').value
         self.wifi_interface = self.get_parameter('wifi_interface').value
         self.update_interval = self.get_parameter('update_interval').value
         self.max_signal_strength = self.get_parameter('max_signal_strength').value
@@ -109,6 +111,8 @@ class WifiDataCollector(Node):
 
         # Initialize database
         self.create_table()
+        if self.db_clear_on_start:
+            self.clear_database()
         
         # Create odometry subscription with optimized QoS settings
         qos = QoSProfile(
@@ -210,10 +214,10 @@ class WifiDataCollector(Node):
     def create_table(self):
         """Create the database table with proper constraints and indices."""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path)  # if the file does not exist yet, SQLite creates it automatically.
             cursor = conn.cursor()
             
-            # Create table with proper constraints
+            # Create table with proper constraints, if not exists:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS wifi_data (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,7 +237,7 @@ class WifiDataCollector(Node):
                 )
             """)
             
-            # Create indices for better query performance
+            # Create indices for better query performance, if they don't already exist:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON wifi_data(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_coordinates ON wifi_data(x, y, z)")
 
@@ -243,6 +247,41 @@ class WifiDataCollector(Node):
         except sqlite3.Error as e:
             self.get_logger().error(f"Error creating table: {e}")
             raise
+
+    def clear_database(self):
+        """Clear all existing WiFi records from the database."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM wifi_data")
+            deleted_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+            self.get_logger().info(f"Cleared {deleted_count} existing records from database at {self.db_path}")
+        except sqlite3.Error as e:
+            self.get_logger().error(f"Error clearing database: {e}")
+            raise
+
+    def cleanup_old_data(self, max_age_days: int = 30):
+        """Remove data older than specified days."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                DELETE FROM wifi_data 
+                WHERE timestamp < datetime('now', '-' || ? || ' days')
+            """, (max_age_days,))
+            
+            deleted_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+            
+            if deleted_count > 0:
+                self.get_logger().info(f"Cleaned up {deleted_count} old records")
+                
+        except sqlite3.Error as e:
+            self.get_logger().error(f"Error cleaning up old data: {e}")
 
     def validate_data(self, bit_rate: float, link_quality: float, signal_level: float) -> bool:
         """Validate WiFi data before insertion."""
@@ -303,27 +342,6 @@ class WifiDataCollector(Node):
                 self.create_table()
             except sqlite3.Error as e2:
                 self.get_logger().error(f"Failed to recover from database error: {e2}")
-
-    def cleanup_old_data(self, max_age_days: int = 30):
-        """Remove data older than specified days."""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                DELETE FROM wifi_data 
-                WHERE timestamp < datetime('now', '-' || ? || ' days')
-            """, (max_age_days,))
-            
-            deleted_count = cursor.rowcount
-            conn.commit()
-            conn.close()
-            
-            if deleted_count > 0:
-                self.get_logger().info(f"Cleaned up {deleted_count} old records")
-                
-        except sqlite3.Error as e:
-            self.get_logger().error(f"Error cleaning up old data: {e}")
 
     def get_wifi_data(self) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """Get WiFi data with improved error handling and validation."""

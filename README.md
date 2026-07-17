@@ -167,6 +167,7 @@ Parameters (see [wifi_logger_config.yaml](https://github.com/slgrobotics/wifi_lo
 - `use_gps`: Set *false* on robots without a GPS receiver (skips subscribing to `/gps/filtered` and "*GPS stale*" warnings)
 - `grid_density` rounding factor for x,y,z coordinates, 1 means 0.1 meter grid (usually indoors), 0 means 1 meter grid (usually outdoors)
 - `db_path`: Path to the SQLite database file (default: `wifi_data.db` in current directory)
+- `db_clear_on_start`: Whether to delete all existing records from the SQLite database when the logger node starts. Default: `false`.
 - `wifi_interface`: WiFi interface name (default: auto-detect)
 - `update_interval`: How often to collect data in seconds (default: 1.0)
 - `max_signal_strength`: Maximum expected signal strength in dBm (default: -30.0)
