@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+#
+# contributed by RoboDoc (https://github.com/JHPHELAN)
+#
+
 """Plot wlxUSB signal over time, colored by AP (BSSID).
 Interactive window — run from a session that can display X (PuTTY+X or NoMachine).
 Always writes a PNG next to the CSV.
