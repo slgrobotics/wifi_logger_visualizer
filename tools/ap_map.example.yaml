@@ -1,5 +1,7 @@
 # AP map — EXAMPLE
 #
+# contributed by RoboDoc (https://github.com/JHPHELAN)
+#
 # The plot script (plot_wifi_drive.py) uses this to translate BSSIDs from
 # the CSV into friendly names in the plot legend. Copy this file to
 # `ap_map.yaml` next to your CSV (or to ~/ap_map.yaml) and fill in your
