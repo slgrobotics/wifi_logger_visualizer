@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+#
+# contributed by RoboDoc (https://github.com/JHPHELAN)
+#
+
 # Log per-second WiFi state during a drive-around survey to a CSV.
 #
 # Captures for two interfaces (built-in wlan0 and USB wlx... dongle):
