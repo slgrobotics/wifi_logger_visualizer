@@ -1,5 +1,7 @@
 # tools/
 
+> All content in this folder was contributed by RoboDoc (https://github.com/JHPHELAN).
+
 Ad-hoc drive-around WiFi survey tools. Standalone from the ROS package —
 just a bash logger and a Python plotter. Useful for characterizing WiFi
 coverage in a home/office mesh before bringing up the ROS logger node.
