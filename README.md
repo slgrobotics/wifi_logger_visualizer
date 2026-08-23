@@ -1,10 +1,10 @@
-**Note:** This repository contains slightly modified code by Michael Wimble, the original is here:
-
-https://github.com/wimblerobotics/wifi_logger_visualizer
-
-All credits go to Michael Wimble.
-
-Check out information about WiFi benchmarking, testing and setup [here](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/Sensors/WiFi_Logger_Visualizer.md).
+> **Note:** This repository is a fork of the original code by Michael Wimble ([wimblerobotics/wifi_logger_visualizer](https://github.com/wimblerobotics/wifi_logger_visualizer)), to whom all credit goes.
+>
+> This fork has since diverged to meet different environmental goals.
+> 
+> Significant testing and code contributions were provided by *RoboDoc* - https://github.com/JHPHELAN 
+>
+> For detailed information about WiFi benchmarking, testing, and setup, check out the documentation [here](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/Sensors/WiFi_Logger_Visualizer.md).
 
 ----------
 
