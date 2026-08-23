@@ -217,6 +217,7 @@ class WifiDataCollector(Node):
             conn = sqlite3.connect(self.db_path)  # if the file does not exist yet, SQLite creates it automatically.
             cursor = conn.cursor()
 
+            # (contributed by RoboDoc https://github.com/JHPHELAN).
             # No SQL CHECK constraints on data columns. Python-side
             # validate_data() is authoritative for the value ranges, and
             # those bounds are operator-tunable via
@@ -351,6 +352,7 @@ class WifiDataCollector(Node):
             conn.commit()
 
         except sqlite3.Error as e:
+            # (contributed by RoboDoc https://github.com/JHPHELAN).
             # Do NOT call self.create_table() here. Constraint/data failures
             # are not schema corruption; recreating the table cannot fix
             # them, and opening a second connection while the failed one
@@ -392,6 +394,7 @@ class WifiDataCollector(Node):
                 self.get_logger().debug(
                     "iwconfig did not report Link Quality; skipping tick")
 
+            # (contributed by RoboDoc https://github.com/JHPHELAN).
             # Extract and validate signal level.
             # NOTE: rtl88xx-family USB dongles (and some others) periodically
             # return "Signal level=0 dBm" from the kernel's WEXT/nl80211
@@ -632,6 +635,7 @@ class WifiDataCollector(Node):
         self.x, self.y, self.z = tuple(round(x, self.grid_density) for x in self.current_pose)
         bit_rate, link_quality, signal_level = self.get_wifi_data()
 
+        # (contributed by RoboDoc https://github.com/JHPHELAN).
         # Gate publish + insert on all three fields being valid. iwconfig can
         # emit a spurious "Signal level=0 dBm" during brief loss of beacons,
         # which the acceptance filter drops to None (get_wifi_data retries
