@@ -170,3 +170,25 @@ rosdep install --from-paths src --ignore-src -r -y
 - TODO: Add an application-level probe that submits representative camera
   images to an external semantic-analysis service and records end-to-end
   response time. Network throughput alone cannot predict inference latency.
+
+## RViz status overlay
+
+The V2 combined launch starts `wifi_overlay_node.py` by default; use
+`overlay:=false` to disable it. The bridge converts JSON from
+`wifi_monitor/status` (`std_msgs/msg/String`) to `wifi/overlay`
+(`rviz_2d_overlay_msgs/msg/OverlayText`). Topics are relative to the node namespace.
+In RViz, add the **OverlayText** display from `rviz_2d_overlay_plugins` and select
+`/wifi/overlay` (or the namespaced equivalent). The overlay shows passive radio
+link rates, not active iperf throughput.
+
+To run the bridge separately:
+
+```bash
+ros2 run wifi_logger_visualizer wifi_overlay_node.py
+```
+
+Configure topics, placement, dimensions, font, and RGBA colors in the
+`/**/wifi_overlay_node` section of `config/wifi_logger_config.yaml` or your robot
+config. The robot needs `rviz_2d_overlay_msgs`; the RViz computer also needs
+`rviz_2d_overlay_plugins`. Malformed status messages are skipped with a throttled
+warning.
