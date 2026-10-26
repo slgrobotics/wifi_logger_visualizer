@@ -17,6 +17,7 @@ from rclpy.time import Time
 from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
+from wifi_logger_visualizer.subprocess_trace import node_subprocess_trace, trace_command
 from wifi_logger_visualizer.database_manager import DatabaseManager
 from wifi_logger_visualizer.map_data import cell_for_position, load_map
 from wifi_logger_visualizer.wifi_data_fetcher import WiFiDataFetcher
@@ -46,9 +47,9 @@ def iperf_mbps(output: str) -> float:
     return float(summary["bits_per_second"]) / 1_000_000.0
 
 
-def run_ping(host: str, count: int = 10, interval: float = 0.2) -> Dict[str, Any]:
+def run_ping(host: str, count: int = 10, interval: float = 0.2, trace=None) -> Dict[str, Any]:
     completed = subprocess.run(
-        ["ping", "-n", "-c", str(count), "-i", str(interval), "-W", "1", host],
+        trace_command(["ping", "-n", "-c", str(count), "-i", str(interval), "-W", "1", host], trace),
         check=False,  # not to raise an exception when the command exits with a nonzero status.
         capture_output=True,
         text=True,
@@ -60,7 +61,7 @@ def run_ping(host: str, count: int = 10, interval: float = 0.2) -> Dict[str, Any
     return parsed
 
 
-def run_iperf(host: str, duration: int, reverse: bool = False) -> float:
+def run_iperf(host: str, duration: int, reverse: bool = False, trace=None) -> float:
     command = [
         "iperf3",
         "-c",
@@ -74,7 +75,7 @@ def run_iperf(host: str, duration: int, reverse: bool = False) -> float:
     if reverse:
         command.append("--reverse")
     completed = subprocess.run(
-        command,
+        trace_command(command, trace),
         check=False,
         capture_output=True,
         text=True,
@@ -98,6 +99,7 @@ def perform_survey(
     target_host: str,
     duration: int,
     bssid: Optional[str],
+    trace=None,
 ) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "measured_at": datetime.now(timezone.utc).isoformat(),
@@ -108,14 +110,14 @@ def perform_survey(
     try:
         target_address = socket.gethostbyname(target_host)
         result["target_address"] = target_address
-        idle = run_ping(target_address)
+        idle = run_ping(target_address, trace=trace)
         result.update(
             idle_latency_ms=idle["latency_ms"],
             idle_jitter_ms=idle["jitter_ms"],
             idle_packet_loss_percent=idle["packet_loss_percent"],
         )
         ping_process = subprocess.Popen(
-            [
+            trace_command([
                 "ping",
                 "-n",
                 "-c",
@@ -125,13 +127,13 @@ def perform_survey(
                 "-W",
                 "1",
                 target_address,
-            ],
+            ], trace),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
         try:
-            result["upload_mbps"] = run_iperf(target_address, duration)
+            result["upload_mbps"] = run_iperf(target_address, duration, trace=trace)
         finally:
             ping_stdout, ping_stderr = ping_process.communicate(
                 timeout=max(15, duration + 10)
@@ -145,7 +147,7 @@ def perform_survey(
             loaded_packet_loss_percent=loaded["packet_loss_percent"],
         )
         result["download_mbps"] = run_iperf(
-            target_address, duration, reverse=True
+            target_address, duration, reverse=True, trace=trace
         )
         result["success"] = True
         result["error_text"] = None
@@ -167,6 +169,8 @@ class WifiSurveyNode(Node):
         self.declare_parameter("db_path", "~/.ros/titania_wifi.db")
         self.declare_parameter("map_yaml_path", "")
         self.declare_parameter("target_host", "amdc")
+        self.declare_parameter("trace_subprocess_runs", True)
+        self._trace_subprocess = node_subprocess_trace(self)
         self.declare_parameter("wifi_interface", "")
         self.declare_parameter("cell_size", 0.25)
         self.declare_parameter("stationary_seconds", 3.0)
@@ -194,7 +198,8 @@ class WifiSurveyNode(Node):
         )
         self.iperf_duration = int(self.get_parameter("iperf_duration").value)
         self.fetcher = WiFiDataFetcher(
-            str(self.get_parameter("wifi_interface").value)
+            str(self.get_parameter("wifi_interface").value),
+            trace=self._trace_subprocess,
         )
 
         self.tf_buffer = Buffer()
@@ -285,6 +290,7 @@ class WifiSurveyNode(Node):
             self.target_host,
             self.iperf_duration,
             bssid,
+            self._trace_subprocess,
         )
         self.get_logger().info(f"Surveying cell {cell} against {self.target_host}")
 

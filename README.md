@@ -192,3 +192,14 @@ Configure topics, placement, dimensions, font, and RGBA colors in the
 config. The robot needs `rviz_2d_overlay_msgs`; the RViz computer also needs
 `rviz_2d_overlay_plugins`. Malformed status messages are skipped with a throttled
 warning.
+
+Subprocess tracing is enabled by default on the logger and survey nodes via
+`trace_subprocess_runs: true`. Each `iw`, `ping`, and `iperf3` command is logged at
+INFO level immediately before execution, with shell quoting to preserve argument
+boundaries (commands still execute without a shell). Disable it in the common
+YAML parameters or at runtime on each node:
+
+```bash
+ros2 param set /wifi_logger_node trace_subprocess_runs false
+ros2 param set /wifi_survey_node trace_subprocess_runs false
+```

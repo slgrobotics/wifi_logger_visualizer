@@ -12,6 +12,7 @@ from rclpy.time import Time
 from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
+from wifi_logger_visualizer.subprocess_trace import node_subprocess_trace
 from wifi_logger_visualizer.database_manager import DatabaseManager
 from wifi_logger_visualizer.map_data import cell_center, cell_for_position, load_map
 from wifi_logger_visualizer.wifi_data_fetcher import WiFiDataFetcher
@@ -24,6 +25,8 @@ class WifiDataCollector(Node):
         super().__init__("wifi_logger_node")
         self.declare_parameter("db_path", "~/.ros/titania_wifi.db")
         self.declare_parameter("map_yaml_path", "")
+        self.declare_parameter("trace_subprocess_runs", True)
+        self._trace_subprocess = node_subprocess_trace(self)
         self.declare_parameter("wifi_interface", "")
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("robot_frame", "base_link")
@@ -46,7 +49,8 @@ class WifiDataCollector(Node):
         self.pose_max_age = float(self.get_parameter("pose_max_age").value)
         self.visit_gap = float(self.get_parameter("visit_gap").value)
         self.fetcher = WiFiDataFetcher(
-            str(self.get_parameter("wifi_interface").value)
+            str(self.get_parameter("wifi_interface").value),
+            trace=self._trace_subprocess,
         )
 
         self.tf_buffer = Buffer()

@@ -4,6 +4,7 @@
     map_yaml_path: ""
     wifi_interface: ""
     cell_size: 0.25
+    trace_subprocess_runs: true
 
 /wifi_logger_node:
   ros__parameters:
