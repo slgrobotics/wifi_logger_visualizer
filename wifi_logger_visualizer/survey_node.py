@@ -49,7 +49,7 @@ def iperf_mbps(output: str) -> float:
 def run_ping(host: str, count: int = 10, interval: float = 0.2) -> Dict[str, Any]:
     completed = subprocess.run(
         ["ping", "-n", "-c", str(count), "-i", str(interval), "-W", "1", host],
-        check=False,
+        check=False,  # not to raise an exception when the command exits with a nonzero status.
         capture_output=True,
         text=True,
         timeout=max(10.0, count * interval + 5.0),
@@ -75,11 +75,22 @@ def run_iperf(host: str, duration: int, reverse: bool = False) -> float:
         command.append("--reverse")
     completed = subprocess.run(
         command,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         timeout=duration + 15,
     )
+    try:
+        payload = json.loads(completed.stdout)
+    except ValueError:
+        payload = {}
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if completed.returncode or error:
+        detail = error or completed.stderr.strip() or completed.stdout.strip() or "no diagnostic output"
+        direction = "download" if reverse else "upload"
+        raise RuntimeError(
+            f"iperf3 {direction} to {host} failed (exit {completed.returncode}): {detail}"
+        )
     return iperf_mbps(completed.stdout)
 
 
