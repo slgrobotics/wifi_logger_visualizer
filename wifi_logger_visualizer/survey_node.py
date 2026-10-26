@@ -88,14 +88,15 @@ def perform_survey(
     duration: int,
     bssid: Optional[str],
 ) -> Dict[str, Any]:
-    target_address = socket.gethostbyname(target_host)
     result: Dict[str, Any] = {
         "measured_at": datetime.now(timezone.utc).isoformat(),
-        "target_address": target_address,
+        "target_address": None,
         "bssid": bssid,
         "success": False,
     }
     try:
+        target_address = socket.gethostbyname(target_host)
+        result["target_address"] = target_address
         idle = run_ping(target_address)
         result.update(
             idle_latency_ms=idle["latency_ms"],
