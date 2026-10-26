@@ -22,6 +22,7 @@ def generate_launch_description():
         "cell_size": LaunchConfiguration("cell_size"),
     }
     return LaunchDescription([
+        DeclareLaunchArgument("overlay", default_value="true"),
         DeclareLaunchArgument("monitoring", default_value="true"),
         DeclareLaunchArgument("survey", default_value="false"),
         DeclareLaunchArgument("visualization", default_value="true"),
@@ -43,6 +44,14 @@ def generate_launch_description():
             executable="wifi_visualizer_node.py",
             condition=IfCondition(LaunchConfiguration("visualization")),
             parameters=[config, common],
+            output="screen",
+        ),
+        Node(
+            package="wifi_logger_visualizer",
+            executable="wifi_overlay_node.py",
+            name="wifi_overlay_node",
+            condition=IfCondition(LaunchConfiguration("overlay")),
+            parameters=[config],
             output="screen",
         ),
         Node(

@@ -16,6 +16,7 @@
   <depend>std_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>
+  <exec_depend>rviz_2d_overlay_msgs</exec_depend>
   <depend>python3-matplotlib</depend>
   <depend>python3-numpy</depend>
   <depend>python3-sqlite3</depend>
