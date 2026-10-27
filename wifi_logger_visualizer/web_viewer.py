@@ -46,7 +46,7 @@ body { font-family: sans-serif; margin: 1rem; background: #202124; color: #eee; 
 <button id="refresh">Refresh</button><button id="export">Export PNG</button></div>
 <div id="content"><div id="wrap"><img id="map"><canvas id="overlay"></canvas></div>
 <div id="legend"><div id="legendTitle"></div><div id="legendBody"></div></div></div>
-<div id="tip"></div>
+<div id="loadStatus" role="status"></div><div id="tip"></div>
 <script>
 const ranges={signal:[-90,-35],tx:[0,1200],rx:[0,1200],upload:[0,500],
  download:[0,500],idle_latency:[0,100],loaded_latency:[0,200],age:[0,30]};
@@ -115,6 +115,7 @@ function drawLegend(metric){
   note.append(swatch,label);body.append(note);}
 }
 function draw(){
+ if(!payload || !document.getElementById("map").naturalWidth)return;
  const img=document.getElementById('map'), c=document.getElementById('overlay');
  c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');
  x.clearRect(0,0,c.width,c.height);drawn=[];
@@ -133,21 +134,48 @@ function draw(){
   const [px,py]=pixel(cell.center_x,cell.center_y);x.fillStyle=color(v,metric);
   x.fillRect(px-size/2,py-size/2,size,size);drawn.push({px,py,size,cell,value:v});}
 }
-async function load(){
- const id=document.getElementById('mapSelect').value;
- payload=await (await fetch('/api/data'+(id?'?map_id='+id:''))).json();
- const sel=document.getElementById('mapSelect');if(!sel.options.length){
+let loading=false;
+async function loadData(){
+ if(loading)return;
+ loading=true;
+ const status=document.getElementById('loadStatus');
+ status.textContent='Loading map data...';
+ try{
+  const id=document.getElementById('mapSelect').value;
+  const url='/api/data'+(id?'?map_id='+encodeURIComponent(id):'');
+  let data;
+  for(let attempt=0;attempt<2;attempt++){
+   try{
+    const response=await fetch(url,{cache:'no-store'});
+    if(!response.ok)throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    data=await response.json();
+    break;
+   }catch(error){
+    if(error.name!=='AbortError'||attempt===1)throw error;
+    status.textContent='Data request was aborted; retrying...';
+    await new Promise(resolve=>setTimeout(resolve,300));
+   }
+  }
+  if(!data.map||!Array.isArray(data.maps))throw new Error('Invalid map data response');
+  payload=data;
+  const sel=document.getElementById('mapSelect');
+  sel.replaceChildren();
   for(const m of payload.maps){const o=document.createElement('option');o.value=m.id;
    o.text=`${m.id}: ${m.source_yaml_path} (${m.content_hash.slice(0,8)})`;sel.add(o);}
   sel.value=payload.map.id;
- }
- const img=document.getElementById('map');img.onload=draw;
- img.src='/map.png?map_id='+payload.map.id+'&t='+Date.now();
+  const img=document.getElementById('map');
+  img.onload=()=>{draw();status.textContent='';};
+  img.onerror=()=>{status.textContent='Map image failed to load. Click Refresh to retry.';};
+  img.src='/map.png?map_id='+payload.map.id+'&t='+Date.now();
+ }catch(error){
+  console.error('Wi-Fi map load failed:',error);
+  status.textContent=`Could not load map data: ${error.message}. Click Refresh to retry.`;
+ }finally{loading=false;}
 }
 document.getElementById('metric').onchange=draw;
 document.getElementById('unmeasured').onchange=draw;
-document.getElementById('mapSelect').onchange=load;
-document.getElementById('refresh').onclick=load;
+document.getElementById('mapSelect').onchange=loadData;
+document.getElementById('refresh').onclick=loadData;
 document.getElementById('export').onclick=()=>{
  const image=document.getElementById('map'),overlay=document.getElementById('overlay');
  const output=document.createElement('canvas');output.width=overlay.width;
@@ -170,7 +198,7 @@ document.getElementById('overlay').onmousemove=e=>{const r=e.target.getBoundingC
  document.getElementById('tip').textContent=hit?
   `${shown} at ${position}; ${signal}; ${node}`+
   hit.cell.last_observed_at:'';};
-load();
+loadData();
 </script></body></html>"""
 
 
