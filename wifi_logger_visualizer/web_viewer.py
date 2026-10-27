@@ -90,15 +90,30 @@ function apLabel(bssid){
  if(!bssid)return 'Unknown Node';
  return (nodeNames[bssid.toLowerCase()]||'Unknown Node')+' ('+bssid+')';
 }
+function gpsFixStatus(status){
+ if(!Number.isInteger(status))return 'Not available';
+ return ({'-2':'Unknown','-1':'No fix','0':'Fix (unaugmented)',
+  '1':'Fix with satellite-based augmentation (SBAS)',
+  '2':'Fix with ground-based augmentation (GBAS)'})[status]??`Unknown (${status})`;
+}
+function gpsService(service){
+ if(!Number.isInteger(service)||service<0)return 'Not available';
+ if(service===0)return 'Unknown';
+ const systems=[[1,'GPS'],[2,'GLONASS'],[4,'BeiDou (COMPASS)'],[8,'Galileo']];
+ const names=systems.filter(([bit])=>(service&bit)!==0).map(([,name])=>name);
+ const unknown=service&~15;
+ if(unknown)names.push(`Unknown flags (${unknown})`);
+ return names.join(' + ');
+}
 function gpsDetails(cell){
  const value=v=>v===null||v===undefined||v===''?'Not available':String(v);
  const coordinate=v=>typeof v==='number'&&Number.isFinite(v)?v.toFixed(7)+'°':'Not available';
  const altitude=typeof cell.altitude==='number'&&Number.isFinite(cell.altitude)?
   cell.altitude.toFixed(3)+' m (WGS 84)':'Not available';
- return `GPS: latitude ${coordinate(cell.latitude)}, longitude ${coordinate(cell.longitude)}, altitude ${altitude}`+
-  ` · Fix status: ${value(cell.gps_status)} · Service: ${value(cell.gps_service)}`+
-  ` · GPS stamp (ROS ns): ${value(cell.gps_stamp_ns)} · Frame: ${value(cell.gps_frame_id)}`+
-  ` · Covariance (ENU, m²): ${value(cell.gps_covariance)} · Covariance type: ${value(cell.gps_covariance_type)}`;
+ return ` ·  ·  · GPS: lat: ${coordinate(cell.latitude)}, long: ${coordinate(cell.longitude)}, alt: ${altitude}`
+  + ` ·  ·  · Fix status: ${gpsFixStatus(cell.gps_status)} · Service: ${gpsService(cell.gps_service)}`
+  + ` · GPS stamp (ROS ns): ${value(cell.gps_stamp_ns)} · Frame: ${value(cell.gps_frame_id)}`
+  //+ ` · Covariance (ENU, m²): ${value(cell.gps_covariance)} · Covariance type: ${value(cell.gps_covariance_type)}`;
 }
 let payload=null, drawn=[];
 function color(value, metric) {
