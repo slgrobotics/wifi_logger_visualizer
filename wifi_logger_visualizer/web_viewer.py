@@ -85,9 +85,20 @@ const units={signal:'dBm',tx:'Mb/s',rx:'Mb/s',upload:'Mb/s',download:'Mb/s',
  idle_latency:'ms',loaded_latency:'ms',age:'days'};
 const unmeasuredColor='rgba(65,105,225,.48)';
 const nodeNames=__NODE_NAMES__;
+const useGps=__USE_GPS__;
 function apLabel(bssid){
  if(!bssid)return 'Unknown Node';
  return (nodeNames[bssid.toLowerCase()]||'Unknown Node')+' ('+bssid+')';
+}
+function gpsDetails(cell){
+ const value=v=>v===null||v===undefined||v===''?'Not available':String(v);
+ const coordinate=v=>typeof v==='number'&&Number.isFinite(v)?v.toFixed(7)+'°':'Not available';
+ const altitude=typeof cell.altitude==='number'&&Number.isFinite(cell.altitude)?
+  cell.altitude.toFixed(3)+' m (WGS 84)':'Not available';
+ return `GPS: latitude ${coordinate(cell.latitude)}, longitude ${coordinate(cell.longitude)}, altitude ${altitude}`+
+  ` · Fix status: ${value(cell.gps_status)} · Service: ${value(cell.gps_service)}`+
+  ` · GPS stamp (ROS ns): ${value(cell.gps_stamp_ns)} · Frame: ${value(cell.gps_frame_id)}`+
+  ` · Covariance (ENU, m²): ${value(cell.gps_covariance)} · Covariance type: ${value(cell.gps_covariance_type)}`;
 }
 let payload=null, drawn=[];
 function color(value, metric) {
@@ -232,7 +243,7 @@ document.getElementById('overlay').onmousemove=e=>{const r=e.target.getBoundingC
  const observedText=Number.isNaN(observed.getTime())?'Not available':
   observed.toLocaleString(undefined,{timeZoneName:'short'});
  tip.textContent=[
-  `Position: X ${cell.center_x.toFixed(2)} m, Y ${cell.center_y.toFixed(2)} m · Cell (${cell.cell_x}, ${cell.cell_y})`,
+  `Position: X ${cell.center_x.toFixed(2)} m, Y ${cell.center_y.toFixed(2)} m · Cell (${cell.cell_x}, ${cell.cell_y})${useGps?' · '+gpsDetails(cell):''}`,
   `Access point: ${apLabel(cell.bssid)}`,
   `${titles[metric]}: ${selected}`,
   `Signal: latest ${number(cell.signal_dbm_last,'dBm')} · weakest ${number(cell.signal_dbm_min,'dBm')} · strongest ${number(cell.signal_dbm_max,'dBm')}`,
@@ -271,11 +282,12 @@ def robot_name() -> str:
     return socket.gethostname().split(".", 1)[0].capitalize()
 
 
-def rendered_html(node_names: dict[str, str]) -> str:
+def rendered_html(node_names: dict[str, str], use_gps: bool = False) -> str:
     name = robot_name()
     return (HTML.replace("__ROBOT_NAME__", html.escape(name))
             .replace("__MAP_DOWNLOAD_NAME__", json.dumps(name.lower() + "-wifi-map.png"))
-            .replace("__NODE_NAMES__", json.dumps(node_names, separators=(",", ":"))))
+            .replace("__NODE_NAMES__", json.dumps(node_names, separators=(",", ":")))
+            .replace("__USE_GPS__", json.dumps(use_gps)))
 
 
 class ViewerHTTPServer(ThreadingHTTPServer):
@@ -295,6 +307,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
     db_path = ""
     cell_size = 0.25
     node_names: dict[str, str] = {}
+    use_gps = False
 
     def _map_id(self, database: DatabaseManager) -> int:
         query = parse_qs(urlparse(self.path).query)
@@ -336,7 +349,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/":
             self._send(
-                rendered_html(self.node_names).encode(),
+                rendered_html(self.node_names, self.use_gps).encode(),
                 "text/html; charset=utf-8",
             )
             return
@@ -352,6 +365,11 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 self.send_error(404, "Map not found")
                 return
             if path == "/api/data":
+                cells = database.get_cells(map_id)
+                # JS numbers cannot represent nanosecond ROS stamps exactly.
+                for cell in cells:
+                    if cell.get("gps_stamp_ns") is not None:
+                        cell["gps_stamp_ns"] = str(cell["gps_stamp_ns"])
                 public_map = {
                     key: value for key, value in map_data.items()
                     if key not in ("image_data", "yaml_text")
@@ -361,7 +379,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
                         "maps": database.list_maps(),
                         "map": public_map,
                         "cell_size": self.cell_size,
-                        "cells": database.get_cells(map_id),
+                        "cells": cells,
                         "surveys": database.get_surveys(map_id),
                         "free_cells": free_cell_centers(map_data, self.cell_size),
                     }
@@ -403,6 +421,8 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8088)
     parser.add_argument("--cell-size", type=float, default=0.25)
+    parser.add_argument("--use-gps", action=argparse.BooleanOptionalAction,
+                        default=False, help="Display GPS metadata in cell details")
     parser.add_argument(
         "--node-names",
         help="YAML file containing an access_points BSSID-to-name mapping",
@@ -430,6 +450,7 @@ def main() -> None:
         return
     ViewerHandler.db_path = db_path
     ViewerHandler.cell_size = args.cell_size
+    ViewerHandler.use_gps = args.use_gps
     ViewerHandler.node_names = load_node_names(node_names_path)
     server = ViewerHTTPServer((args.host, args.port), ViewerHandler)
     print(f"Wi-Fi viewer: http://{args.host}:{args.port}")

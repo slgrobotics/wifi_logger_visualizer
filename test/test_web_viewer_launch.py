@@ -25,7 +25,7 @@ def context(tmp_path):
     }))
     ctx = LaunchContext()
     ctx.launch_configurations.update(config_filepath=str(config), db='', host='',
-                                     port='', cell_size='', node_names='')
+                                     port='', cell_size='', node_names='', use_gps='')
     return ctx
 
 
@@ -56,4 +56,17 @@ def test_arguments_override_yaml(context):
 def test_rejects_invalid_settings(context, key, value):
     context.launch_configurations[key] = value
     with pytest.raises(ValueError):
+        command(context)
+
+
+def test_shared_gps_setting_and_explicit_override(context):
+    path = Path(context.launch_configurations['config_filepath'])
+    settings = yaml.safe_load(path.read_text())
+    settings['/**']['ros__parameters']['use_gps'] = True
+    path.write_text(yaml.safe_dump(settings))
+    assert '--use-gps' in command(context)
+    context.launch_configurations['use_gps'] = 'false'
+    assert '--use-gps' not in command(context)
+    context.launch_configurations['use_gps'] = 'invalid'
+    with pytest.raises(ValueError, match='use_gps'):
         command(context)

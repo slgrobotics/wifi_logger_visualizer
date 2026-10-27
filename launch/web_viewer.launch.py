@@ -49,6 +49,11 @@ def _launch_viewer(context):
     node_names = value("node_names", viewer.get("node_names", ""))
     if node_names:
         command.extend(["--node-names", os.path.expanduser(str(node_names))])
+    use_gps = str(value("use_gps", common.get("use_gps", False))).lower()
+    if use_gps not in ("true", "false"):
+        raise ValueError("use_gps must be true or false")
+    if use_gps == "true":
+        command.append("--use-gps")
     # The viewer uses argparse rather than ROS parameters.
     return [ExecuteProcess(
         cmd=command, output="screen", additional_env={"PYTHONUNBUFFERED": "1"},
@@ -73,5 +78,7 @@ def generate_launch_description():
                               description="Wi-Fi cell size in meters"),
         DeclareLaunchArgument("node_names", default_value="",
                               description="Optional access-point names YAML file"),
+        DeclareLaunchArgument("use_gps", default_value="",
+                              description="Show GPS details; defaults to shared YAML use_gps or false"),
         OpaqueFunction(function=_launch_viewer),
     ])

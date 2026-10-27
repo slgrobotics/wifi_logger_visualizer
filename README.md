@@ -71,16 +71,24 @@ ros2 launch wifi_logger_visualizer wifi_logger_visualizer.launch.py \
 
 ## Optional GPS metadata
 
-Set these startup parameters in the `/wifi_logger_node` YAML section:
+Set `use_gps` in the shared `/**` YAML parameters so collection and the browser
+viewer use the same setting (default false):
 
 ```yaml
-use_gps: true
-gps_topic: "/gps/filtered"
-gps_max_age: 2.0
+/**:
+  ros__parameters:
+    use_gps: true
+/wifi_logger_node:
+  ros__parameters:
+    gps_topic: "/gps/filtered"
+    gps_max_age: 2.0
 ```
 
 GPS defaults to disabled, with no `NavSatFix` subscription. When enabled,
 the passive logger associates the latest valid fix with each Wi-Fi observation.
+The viewer shows GPS details on the Position/Cell line only when enabled.
+For direct CLI use, pass `--use-gps`; the standalone viewer launch also accepts
+`use_gps:=true` or `use_gps:=false` to override the shared YAML value.
 Fix status 0 (ordinary fix) is accepted, along with augmented fixes. Source
 timestamps must be nonzero, not in the future, and within `gps_max_age` seconds
 of the logger's ROS clock; the publisher must use the same clock.

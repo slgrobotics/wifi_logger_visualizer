@@ -58,7 +58,7 @@ def test_startup_prints_effective_parameters(capsys, tmp_path):
     output = capsys.readouterr().out
     data, _ = json.JSONDecoder().raw_decode(output.split('Wi-Fi viewer parameters:\n')[1])
     assert data == dict(db=str(database), host='0.0.0.0', port=8089,
-                        cell_size=0.5, node_names=str(names), snapshot=None)
+                        cell_size=0.5, node_names=str(names), snapshot=None, use_gps=False)
     server.server_close.assert_called_once()
 
 
@@ -146,3 +146,33 @@ def test_robot_name_from_network_hostname(hostname, expected):
     assert f'<title>{expected} Wi-Fi Map</title>' in page
     assert f'<h2>{expected} Wi-Fi coverage</h2>' in page
     assert f'link.download="{expected.lower()}-wifi-map.png"' in page
+
+
+def test_api_preserves_nanosecond_gps_timestamp():
+    import json
+    handler = object.__new__(ViewerHandler)
+    handler.path = '/api/data'
+    handler._map_id = Mock(return_value=1)
+    handler._send = Mock()
+    database = Mock()
+    database.get_map.return_value = {'id': 1}
+    database.list_maps.return_value = []
+    database.get_surveys.return_value = []
+    database.get_cells.return_value = [
+        {'gps_stamp_ns': 1792969795123456789, 'latitude': 33.95},
+        {'gps_stamp_ns': None}, {},
+    ]
+    with patch('wifi_logger_visualizer.web_viewer.DatabaseManager', return_value=database), \
+            patch('wifi_logger_visualizer.web_viewer.free_cell_centers', return_value=[]):
+        handler._handle_get()
+    cells = json.loads(handler._send.call_args.args[0])['cells']
+    assert cells[0]['gps_stamp_ns'] == '1792969795123456789'
+    assert cells[0]['latitude'] == 33.95
+    assert cells[1]['gps_stamp_ns'] is None
+    assert cells[2] == {}
+
+
+def test_gps_display_is_opt_in():
+    from wifi_logger_visualizer.web_viewer import rendered_html
+    assert 'const useGps=false;' in rendered_html({})
+    assert 'const useGps=true;' in rendered_html({}, use_gps=True)
