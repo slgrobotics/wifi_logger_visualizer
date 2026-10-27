@@ -226,12 +226,24 @@ class ViewerHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        try:
+            self._handle_get()
+        except (BrokenPipeError, ConnectionResetError):
+            # A browser can cancel a request during navigation or refresh.
+            # The response cannot be delivered; keep serving other requests.
+            pass
+
+    def _handle_get(self) -> None:
         path = urlparse(self.path).path
         if path == "/":
             self._send(
                 rendered_html(self.node_names).encode(),
                 "text/html; charset=utf-8",
             )
+            return
+        if path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
             return
         database = DatabaseManager(self.db_path)
         try:
