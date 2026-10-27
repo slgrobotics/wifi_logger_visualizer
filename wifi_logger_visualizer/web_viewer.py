@@ -45,7 +45,7 @@ h2 { margin:0; font-size:1.2rem; font-weight:600; }
 .legendLabels { display:flex; flex-direction:column; justify-content:space-between; }
 .legendEntry { display:flex; gap:.5rem; align-items:center; margin:.4rem 0; }
 .legendSwatch { width:1.25rem; height:1.25rem; border:1px solid #aaa; }
-#tip { min-height:8.5em; max-height:30vh; overflow:auto; padding:.65rem .8rem;
+#tip { min-height:8.925em; max-height:31.5vh; overflow:auto; padding:.65rem .8rem;
  font-size:.85rem; line-height:1.5; flex-shrink:0; white-space:pre-line;
  background:#292a2d; border:1px solid #444; border-radius:.5rem; }
 #loadStatus:empty { display:none; }
@@ -236,7 +236,7 @@ document.getElementById('overlay').onmousemove=e=>{const r=e.target.getBoundingC
   `Access point: ${apLabel(cell.bssid)}`,
   `${titles[metric]}: ${selected}`,
   `Signal: latest ${number(cell.signal_dbm_last,'dBm')} · weakest ${number(cell.signal_dbm_min,'dBm')} · strongest ${number(cell.signal_dbm_max,'dBm')}`,
-  `Last observed: ${observedText}`
+  `Last observed: ${observedText} [${cell.last_observed_at ?? 'Not available'}]`
  ].join('\\n');};
 loadData();
 </script></body></html>"""
