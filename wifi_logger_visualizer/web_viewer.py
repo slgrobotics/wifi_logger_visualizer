@@ -45,7 +45,9 @@ h2 { margin:0; font-size:1.2rem; font-weight:600; }
 .legendLabels { display:flex; flex-direction:column; justify-content:space-between; }
 .legendEntry { display:flex; gap:.5rem; align-items:center; margin:.4rem 0; }
 .legendSwatch { width:1.25rem; height:1.25rem; border:1px solid #aaa; }
-#tip { min-height:1.4rem; font-size:.85rem; flex-shrink:0; }
+#tip { min-height:8.5em; max-height:30vh; overflow:auto; padding:.65rem .8rem;
+ font-size:.85rem; line-height:1.5; flex-shrink:0; white-space:pre-line;
+ background:#292a2d; border:1px solid #444; border-radius:.5rem; }
 #loadStatus:empty { display:none; }
 select,button { padding:.4rem .55rem; border:1px solid #666; border-radius:.3rem;
  background:#303134; color:#eee; }
@@ -71,7 +73,7 @@ button:hover { background:#45464a; }
 <button id="refresh">Refresh</button><button id="export">Export PNG</button></div>
 <div id="content"><div id="viewport"><div id="wrap"><img id="map" alt="Wi-Fi coverage map"><canvas id="overlay"></canvas></div></div>
 <div id="legend"><div id="legendTitle"></div><div id="legendBody"></div></div></div>
-<div id="loadStatus" role="status"></div><div id="tip"></div>
+<div id="loadStatus" role="status"></div><div id="tip">Hover over a measured cell to see its Wi-Fi details.</div>
 <script>
 const ranges={signal:[-90,-35],tx:[0,1200],rx:[0,1200],upload:[0,500],
  download:[0,500],idle_latency:[0,100],loaded_latency:[0,200],age:[0,30]};
@@ -220,18 +222,22 @@ document.getElementById('export').onclick=()=>{
 document.getElementById('overlay').onmousemove=e=>{const r=e.target.getBoundingClientRect();
  const px=(e.clientX-r.left)*e.target.width/r.width,py=(e.clientY-r.top)*e.target.height/r.height;
  const hit=drawn.find(v=>Math.abs(v.px-px)<v.size/2&&Math.abs(v.py-py)<v.size/2);
- const position=hit?
-  `(${hit.cell.center_x.toFixed(2)}, ${hit.cell.center_y.toFixed(2)})`:'';
- const signal=hit?
-  `signal min/last/max ${hit.cell.signal_dbm_min}/`+
-  `${hit.cell.signal_dbm_last}/${hit.cell.signal_dbm_max} dBm`:'';
- const metric=document.getElementById('metric').value;
- const onAp=metric==='bssid';
- const shown=hit?(onAp?apLabel(hit.value):hit.value):'';
- const node=onAp?'':`${apLabel(hit?hit.cell.bssid:null)}; `;
- document.getElementById('tip').textContent=hit?
-  `${shown} at ${position}; ${signal}; ${node}`+
-  hit.cell.last_observed_at:'';};
+ const tip=document.getElementById('tip');
+ if(!hit){tip.textContent='Hover over a measured cell to see its Wi-Fi details.';return;}
+ const cell=hit.cell,metric=document.getElementById('metric').value;
+ const number=(value,unit)=>typeof value==='number'&&Number.isFinite(value)?
+  `${value.toFixed(1)} ${unit}`:'Not available';
+ const selected=metric==='bssid'?apLabel(hit.value):number(hit.value,units[metric]);
+ const observed=new Date(cell.last_observed_at);
+ const observedText=Number.isNaN(observed.getTime())?'Not available':
+  observed.toLocaleString(undefined,{timeZoneName:'short'});
+ tip.textContent=[
+  `Position: X ${cell.center_x.toFixed(2)} m, Y ${cell.center_y.toFixed(2)} m · Cell (${cell.cell_x}, ${cell.cell_y})`,
+  `Access point: ${apLabel(cell.bssid)}`,
+  `${titles[metric]}: ${selected}`,
+  `Signal: latest ${number(cell.signal_dbm_last,'dBm')} · weakest ${number(cell.signal_dbm_min,'dBm')} · strongest ${number(cell.signal_dbm_max,'dBm')}`,
+  `Last observed: ${observedText}`
+ ].join('\\n');};
 loadData();
 </script></body></html>"""
 
