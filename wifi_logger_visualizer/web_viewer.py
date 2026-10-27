@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
 from pathlib import Path
 import sqlite3
+from threading import Lock
 from urllib.parse import parse_qs, urlparse
 
 import matplotlib.pyplot as plt
@@ -232,6 +233,19 @@ def rendered_html(node_names: dict[str, str]) -> str:
     )
 
 
+class ViewerHTTPServer(ThreadingHTTPServer):
+    """Keep idle browser connections from blocking other clients."""
+
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(10.0)
+        return connection, address
+
+
+# Matplotlib is shared across request threads; serialize only image rendering.
+_IMAGE_RENDER_LOCK = Lock()
+
+
 class ViewerHandler(BaseHTTPRequestHandler):
     db_path = ""
     cell_size = 0.25
@@ -256,7 +270,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         try:
             self._handle_get()
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, TimeoutError):
             # A browser can cancel a request during navigation or refresh.
             # The response cannot be delivered; keep serving other requests.
             pass
@@ -298,14 +312,15 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 self._send(body, "application/json")
             elif path == "/map.png":
                 output = io.BytesIO()
-                plt.imsave(
-                    output,
-                    decode_pgm(map_data["image_data"]),
-                    cmap="gray",
-                    vmin=0.0,
-                    vmax=1.0,
-                    format="png",
-                )
+                with _IMAGE_RENDER_LOCK:
+                    plt.imsave(
+                        output,
+                        decode_pgm(map_data["image_data"]),
+                        cmap="gray",
+                        vmin=0.0,
+                        vmax=1.0,
+                        format="png",
+                    )
                 self._send(output.getvalue(), "image/png")
             else:
                 self.send_error(404)
@@ -359,7 +374,7 @@ def main() -> None:
     ViewerHandler.db_path = db_path
     ViewerHandler.cell_size = args.cell_size
     ViewerHandler.node_names = load_node_names(node_names_path)
-    server = HTTPServer((args.host, args.port), ViewerHandler)
+    server = ViewerHTTPServer((args.host, args.port), ViewerHandler)
     print(f"Wi-Fi viewer: http://{args.host}:{args.port}")
     try:
         server.serve_forever()
