@@ -132,3 +132,17 @@ def test_idle_browser_connection_does_not_block_other_requests(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+@pytest.mark.parametrize('hostname,expected', [('seggy.local', 'Seggy'),
+                                              ('seggy', 'Seggy'),
+                                              ('titania.example.org', 'Titania')])
+def test_robot_name_from_network_hostname(hostname, expected):
+    from wifi_logger_visualizer.web_viewer import robot_name, rendered_html
+
+    with patch('wifi_logger_visualizer.web_viewer.socket.gethostname', return_value=hostname):
+        assert robot_name() == expected
+        page = rendered_html({})
+    assert f'<title>{expected} Wi-Fi Map</title>' in page
+    assert f'<h2>{expected} Wi-Fi coverage</h2>' in page
+    assert f'link.download="{expected.lower()}-wifi-map.png"' in page

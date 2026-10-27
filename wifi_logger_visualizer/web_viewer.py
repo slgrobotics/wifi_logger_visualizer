@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import html
 import io
 import json
 from pathlib import Path
 import sqlite3
+import socket
 from threading import Lock
 from time import monotonic
 from urllib.parse import parse_qs, urlparse
@@ -17,7 +19,7 @@ import yaml
 
 
 HTML = """<!doctype html>
-<html><head><meta charset="utf-8"><title>Titania Wi-Fi Map</title>
+<html><head><meta charset="utf-8"><title>__ROBOT_NAME__ Wi-Fi Map</title>
 <style>
 body { font-family: sans-serif; margin: 1rem; background: #202124; color: #eee; }
 #toolbar { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
@@ -34,7 +36,7 @@ body { font-family: sans-serif; margin: 1rem; background: #202124; color: #eee; 
 .legendSwatch { width:1.25rem; height:1.25rem; border:1px solid #aaa; }
 #tip { min-height:2rem; } select,button { padding:.3rem; }
 </style></head>
-<body><h2>Titania Wi-Fi coverage</h2><div id="toolbar">
+<body><h2>__ROBOT_NAME__ Wi-Fi coverage</h2><div id="toolbar">
 <label>Map <select id="mapSelect"></select></label>
 <label>Layer <select id="metric">
 <option value="signal">Signal (dBm)</option><option value="tx">TX link rate</option>
@@ -183,7 +185,7 @@ document.getElementById('export').onclick=()=>{
  const output=document.createElement('canvas');output.width=overlay.width;
  output.height=overlay.height;const context=output.getContext('2d');
  context.drawImage(image,0,0);context.drawImage(overlay,0,0);
- const link=document.createElement('a');link.download='titania-wifi-map.png';
+ const link=document.createElement('a');link.download=__MAP_DOWNLOAD_NAME__;
  link.href=output.toDataURL('image/png');link.click();};
 document.getElementById('overlay').onmousemove=e=>{const r=e.target.getBoundingClientRect();
  const px=(e.clientX-r.left)*e.target.width/r.width,py=(e.clientY-r.top)*e.target.height/r.height;
@@ -228,10 +230,16 @@ def default_node_names_path() -> Path:
     )
 
 
+def robot_name() -> str:
+    """Use the local machine name without its network domain suffix."""
+    return socket.gethostname().split(".", 1)[0].capitalize()
+
+
 def rendered_html(node_names: dict[str, str]) -> str:
-    return HTML.replace(
-        "__NODE_NAMES__", json.dumps(node_names, separators=(",", ":"))
-    )
+    name = robot_name()
+    return (HTML.replace("__ROBOT_NAME__", html.escape(name))
+            .replace("__MAP_DOWNLOAD_NAME__", json.dumps(name.lower() + "-wifi-map.png"))
+            .replace("__NODE_NAMES__", json.dumps(node_names, separators=(",", ":"))))
 
 
 class ViewerHTTPServer(ThreadingHTTPServer):
@@ -354,7 +362,7 @@ def snapshot_database(source: str, destination: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Browse Titania Wi-Fi maps")
+    parser = argparse.ArgumentParser(description=f"Browse {robot_name()} Wi-Fi maps")
     parser.add_argument("--db", default="~/.ros/titania_wifi.db")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8088)
