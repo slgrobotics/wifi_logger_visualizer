@@ -21,20 +21,41 @@ import yaml
 HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>__ROBOT_NAME__ Wi-Fi Map</title>
 <style>
-body { font-family: sans-serif; margin: 1rem; background: #202124; color: #eee; }
-#toolbar { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
-#content { display:flex; gap:1.25rem; align-items:flex-start; }
-#wrap { position:relative; display:inline-block; }
-#map { display:block; max-width:calc(100vw - 2rem); max-height:75vh; }
+* { box-sizing:border-box; }
+html,body { width:100%; height:100%; }
+body { font-family:system-ui,sans-serif; margin:0; padding:1rem;
+ background:#202124; color:#eee; display:flex; flex-direction:column; gap:.75rem; }
+h2 { margin:0; font-size:1.2rem; font-weight:600; }
+#toolbar { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; flex-shrink:0; }
+#toolbar label { display:flex; align-items:center; gap:.4rem; min-width:0; }
+#mapSelect { max-width:min(32rem,65vw); }
+#content { position:relative; flex:1; min-height:0; min-width:0;
+ background:#151618; border:1px solid #444; border-radius:.6rem; overflow:hidden; }
+#viewport { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+#wrap { position:relative; flex:none; }
+#map { display:block; width:100%; height:100%; image-rendering:pixelated; }
 #overlay { position:absolute; left:0; top:0; width:100%; height:100%; }
-#legend { min-width:10rem; padding:.75rem; background:#303134; border-radius:.4rem; }
+#legend { position:absolute; right:.75rem; top:.75rem; max-width:min(20rem,45%);
+ max-height:calc(100% - 1.5rem); overflow:auto; padding:.75rem;
+ background:rgba(32,33,36,.9); border:1px solid #555; border-radius:.5rem;
+ box-shadow:0 2px 10px #0005; font-size:.85rem; overflow-wrap:anywhere; }
 #legendTitle { font-weight:bold; margin-bottom:.75rem; }
 .legendScale { display:flex; gap:.5rem; height:15rem; }
 .legendBar { width:1.5rem; border:1px solid #aaa; }
 .legendLabels { display:flex; flex-direction:column; justify-content:space-between; }
 .legendEntry { display:flex; gap:.5rem; align-items:center; margin:.4rem 0; }
 .legendSwatch { width:1.25rem; height:1.25rem; border:1px solid #aaa; }
-#tip { min-height:2rem; } select,button { padding:.3rem; }
+#tip { min-height:1.4rem; font-size:.85rem; flex-shrink:0; }
+#loadStatus:empty { display:none; }
+select,button { padding:.4rem .55rem; border:1px solid #666; border-radius:.3rem;
+ background:#303134; color:#eee; }
+button { cursor:pointer; }
+button:hover { background:#45464a; }
+@media (max-width:600px) {
+ body { padding:.5rem; gap:.5rem; }
+ #legend { padding:.5rem; font-size:.75rem; }
+ .legendScale { height:8rem; }
+}
 </style></head>
 <body><h2>__ROBOT_NAME__ Wi-Fi coverage</h2><div id="toolbar">
 <label>Map <select id="mapSelect"></select></label>
@@ -48,7 +69,7 @@ body { font-family: sans-serif; margin: 1rem; background: #202124; color: #eee; 
 </select></label>
 <label><input id="unmeasured" type="checkbox"> Highlight unmeasured free cells</label>
 <button id="refresh">Refresh</button><button id="export">Export PNG</button></div>
-<div id="content"><div id="wrap"><img id="map"><canvas id="overlay"></canvas></div>
+<div id="content"><div id="viewport"><div id="wrap"><img id="map" alt="Wi-Fi coverage map"><canvas id="overlay"></canvas></div></div>
 <div id="legend"><div id="legendTitle"></div><div id="legendBody"></div></div></div>
 <div id="loadStatus" role="status"></div><div id="tip"></div>
 <script>
@@ -118,6 +139,15 @@ function drawLegend(metric){
   const label=document.createElement('span');label.textContent='Unmeasured free space';
   note.append(swatch,label);body.append(note);}
 }
+function fitMap(){
+ const img=document.getElementById('map'),viewport=document.getElementById('viewport');
+ if(!img.naturalWidth||!viewport.clientWidth||!viewport.clientHeight)return;
+ const scale=Math.min(viewport.clientWidth/img.naturalWidth,viewport.clientHeight/img.naturalHeight);
+ const wrap=document.getElementById('wrap');
+ wrap.style.width=img.naturalWidth*scale+'px';
+ wrap.style.height=img.naturalHeight*scale+'px';
+}
+new ResizeObserver(fitMap).observe(document.getElementById('viewport'));
 function draw(){
  if(!payload || !document.getElementById("map").naturalWidth)return;
  const img=document.getElementById('map'), c=document.getElementById('overlay');
@@ -168,7 +198,7 @@ async function loadData(){
    o.text=`${m.id}: ${m.source_yaml_path} (${m.content_hash.slice(0,8)})`;sel.add(o);}
   sel.value=payload.map.id;
   const img=document.getElementById('map');
-  img.onload=()=>{draw();status.textContent='';};
+  img.onload=()=>{fitMap();draw();status.textContent='';};
   img.onerror=()=>{status.textContent='Map image failed to load. Click Refresh to retry.';};
   img.src='/map.png?map_id='+payload.map.id+'&t='+Date.now();
  }catch(error){
