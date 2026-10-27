@@ -77,3 +77,32 @@ def test_free_cell_centers_use_database_cell_coordinates(tmp_path):
     for x, y in centers:
         assert (x / 0.25 - 0.5).is_integer()
         assert (y / 0.25 - 0.5).is_integer()
+
+
+def test_read_only_viewer_reads_while_writer_transaction_is_open(tmp_path):
+    import sqlite3
+    import pytest
+
+    path = str(tmp_path / 'wifi.db')
+    writer = DatabaseManager(path)
+    writer.register_map(load_map(str(write_map(tmp_path))))
+    writer.conn.execute('BEGIN IMMEDIATE')
+    reader = DatabaseManager(path, read_only=True)
+    try:
+        assert len(reader.list_maps()) == 1
+        with pytest.raises(sqlite3.OperationalError, match='readonly'):
+            reader.conn.execute('DELETE FROM maps')
+    finally:
+        reader.close()
+        writer.conn.rollback()
+        writer.close()
+
+
+def test_read_only_does_not_create_missing_database(tmp_path):
+    import sqlite3
+    import pytest
+
+    path = tmp_path / 'missing.db'
+    with pytest.raises(sqlite3.OperationalError):
+        DatabaseManager(str(path), read_only=True)
+    assert not path.exists()

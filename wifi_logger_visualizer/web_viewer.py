@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sqlite3
 from threading import Lock
+from time import monotonic
 from urllib.parse import parse_qs, urlparse
 
 import matplotlib.pyplot as plt
@@ -147,13 +148,13 @@ async function loadData(){
   let data;
   for(let attempt=0;attempt<2;attempt++){
    try{
-    const response=await fetch(url,{cache:'no-store'});
+    const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000)});
     if(!response.ok)throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     data=await response.json();
     break;
    }catch(error){
-    if(error.name!=='AbortError'||attempt===1)throw error;
-    status.textContent='Data request was aborted; retrying...';
+    if(!['AbortError','TimeoutError'].includes(error.name)||attempt===1)throw error;
+    status.textContent='Data request was interrupted or timed out; retrying...';
     await new Promise(resolve=>setTimeout(resolve,300));
    }
   }
@@ -261,19 +262,31 @@ class ViewerHandler(BaseHTTPRequestHandler):
         return int(latest["id"])
 
     def _send(self, body: bytes, content_type: str) -> None:
+        started = monotonic()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
+        self.log_message("response sent: %s, %d bytes in %.3fs", self.path, len(body), monotonic() - started)
 
     def do_GET(self) -> None:
+        started = monotonic()
         try:
             self._handle_get()
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             # A browser can cancel a request during navigation or refresh.
             # The response cannot be delivered; keep serving other requests.
-            pass
+            self.log_message("client disconnected or socket timed out: %s", self.path)
+        except sqlite3.Error as error:
+            self.log_message("database error for %s: %s", self.path, error)
+            try:
+                self.send_error(503, "Wi-Fi database temporarily unavailable; retry the request")
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                pass
+        finally:
+            self.log_message("request finished: %s in %.3fs", self.path, monotonic() - started)
 
     def _handle_get(self) -> None:
         path = urlparse(self.path).path
@@ -287,7 +300,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
-        database = DatabaseManager(self.db_path)
+        database = DatabaseManager(self.db_path, read_only=True)
         try:
             map_id = self._map_id(database)
             map_data = database.get_map(map_id)

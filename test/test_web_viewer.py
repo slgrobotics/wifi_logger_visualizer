@@ -9,6 +9,7 @@ from wifi_logger_visualizer.web_viewer import ViewerHandler
 def test_client_disconnect_during_response_is_ignored(error):
     handler = object.__new__(ViewerHandler)
     handler.path = '/'
+    handler.log_message = Mock()
     handler.send_response = Mock()
     handler.send_header = Mock()
     handler.end_headers = Mock()
@@ -20,6 +21,8 @@ def test_client_disconnect_during_response_is_ignored(error):
 
 def test_unexpected_request_errors_are_not_hidden():
     handler = object.__new__(ViewerHandler)
+    handler.path = '/'
+    handler.log_message = Mock()
     handler._handle_get = Mock(side_effect=RuntimeError('unexpected'))
     with pytest.raises(RuntimeError, match='unexpected'):
         handler.do_GET()
@@ -28,6 +31,7 @@ def test_unexpected_request_errors_are_not_hidden():
 def test_favicon_does_not_open_database():
     handler = object.__new__(ViewerHandler)
     handler.path = '/favicon.ico'
+    handler.log_message = Mock()
     handler.send_response = Mock()
     handler.end_headers = Mock()
     with patch('wifi_logger_visualizer.web_viewer.DatabaseManager') as database:
@@ -113,9 +117,9 @@ def test_idle_browser_connection_does_not_block_other_requests(tmp_path):
                 connection.close()
 
         with ThreadPoolExecutor(max_workers=4) as pool:
-            results = list(pool.map(request, ['/api/data', '/map.png?map_id=1'] * 2))
-        assert len(json.loads(results[0])['maps']) == 1
-        assert results[1].startswith(b'\x89PNG')
+            results = list(pool.map(request, ['/', '/api/data', '/map.png?map_id=1'] * 10))
+        assert len(json.loads(results[1])['maps']) == 1
+        assert results[2].startswith(b'\x89PNG')
         client.close()
         client = http.client.HTTPConnection(*server.server_address, timeout=2)
         client.request('GET', '/favicon.ico')
