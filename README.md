@@ -203,3 +203,18 @@ YAML parameters or at runtime on each node:
 ros2 param set /wifi_logger_node trace_subprocess_runs false
 ros2 param set /wifi_survey_node trace_subprocess_runs false
 ```
+
+Launch the standalone viewer with:
+
+```bash
+ros2 launch wifi_logger_visualizer web_viewer.launch.py db:=/path/to/wifi_data_v2.db
+```
+
+It binds to `0.0.0.0:8088` by default. Optional launch arguments are `host`,
+`port`, `cell_size`, and `node_names` (access-point names YAML).
+
+The standalone viewer reads `config/wifi_logger_config.yaml` by default. Select
+another robot config with `config_filepath:=/path/to/config.yaml`. It reads
+`db_path` and `cell_size` from the common `/**` parameters, and `host`, `port`,
+and optional `node_names` from `/**/wifi_web_viewer`. Explicit launch arguments
+(`db`, `host`, `port`, `cell_size`, `node_names`) override the YAML settings.

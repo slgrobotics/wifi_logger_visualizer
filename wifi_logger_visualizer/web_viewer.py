@@ -311,13 +311,25 @@ def main() -> None:
     parser.add_argument("--snapshot", help="Create a consistent SQLite copy and exit")
     args = parser.parse_args()
     db_path = str(Path(args.db).expanduser().resolve())
+    node_names_path = args.node_names
+    if not node_names_path and not args.snapshot:
+        node_names_path = str(default_node_names_path())
+    if node_names_path:
+        node_names_path = str(Path(node_names_path).expanduser().resolve())
+    snapshot_path = str(Path(args.snapshot).expanduser().resolve()) if args.snapshot else None
+    parameters = {
+        **vars(args),
+        "db": db_path,
+        "node_names": node_names_path,
+        "snapshot": snapshot_path,
+    }
+    print("Wi-Fi viewer parameters:\n" + json.dumps(parameters, indent=2), flush=True)
     if args.snapshot:
-        snapshot_database(db_path, args.snapshot)
+        snapshot_database(db_path, snapshot_path)
         print(f"Snapshot written to {Path(args.snapshot).expanduser().resolve()}")
         return
     ViewerHandler.db_path = db_path
     ViewerHandler.cell_size = args.cell_size
-    node_names_path = args.node_names or str(default_node_names_path())
     ViewerHandler.node_names = load_node_names(node_names_path)
     server = HTTPServer((args.host, args.port), ViewerHandler)
     print(f"Wi-Fi viewer: http://{args.host}:{args.port}")
