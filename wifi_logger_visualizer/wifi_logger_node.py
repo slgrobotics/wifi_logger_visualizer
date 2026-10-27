@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import math
 import subprocess
 from typing import Optional, Tuple
 import uuid
@@ -8,14 +9,17 @@ import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from std_msgs.msg import Bool, String
+from sensor_msgs.msg import NavSatFix
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from wifi_logger_visualizer.subprocess_trace import node_subprocess_trace
 from wifi_logger_visualizer.database_manager import DatabaseManager
 from wifi_logger_visualizer.map_data import cell_center, cell_for_position, load_map
 from wifi_logger_visualizer.wifi_data_fetcher import WiFiDataFetcher
+from wifi_logger_visualizer.gps_data import gps_metadata
 
 
 class WifiDataCollector(Node):
@@ -34,6 +38,20 @@ class WifiDataCollector(Node):
         self.declare_parameter("update_interval", 1.0)
         self.declare_parameter("pose_max_age", 1.0)
         self.declare_parameter("visit_gap", 10.0)
+        self.declare_parameter("use_gps", False)
+        self.declare_parameter("gps_topic", "/gps/filtered")
+        self.declare_parameter("gps_max_age", 2.0)
+        self.use_gps = bool(self.get_parameter("use_gps").value)
+        self.gps_max_age = float(self.get_parameter("gps_max_age").value)
+        if not math.isfinite(self.gps_max_age) or self.gps_max_age <= 0:
+            raise ValueError("gps_max_age must be finite and positive")
+        self.latest_gps = None
+        self.gps_subscription = None
+        if self.use_gps:
+            self.gps_subscription = self.create_subscription(
+                NavSatFix, str(self.get_parameter("gps_topic").value),
+                self._gps_callback, qos_profile_sensor_data,
+            )
 
         map_path = str(self.get_parameter("map_yaml_path").value)
         if not map_path:
@@ -89,6 +107,10 @@ class WifiDataCollector(Node):
     def _recovery_callback(self, message: Bool) -> None:
         self.recovery_active = message.data
 
+    def _gps_callback(self, message: NavSatFix) -> None:
+        # Cache invalid fixes too, so loss of fix immediately invalidates GPS.
+        self.latest_gps = message
+
     def _pose(self) -> Optional[Tuple[float, float]]:
         try:
             transform = self.tf_buffer.lookup_transform(
@@ -138,6 +160,11 @@ class WifiDataCollector(Node):
             self.get_logger().error(f"Unable to read Wi-Fi state: {error}")
             return
 
+        if self.use_gps:
+            sample.update(gps_metadata(
+                self.latest_gps, self.get_clock().now().nanoseconds,
+                self.gps_max_age,
+            ))
         center = cell_center(*cell, self.cell_size)
         self.database.upsert_passive(
             self.map_id,

@@ -106,3 +106,39 @@ def test_read_only_does_not_create_missing_database(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         DatabaseManager(str(path), read_only=True)
     assert not path.exists()
+
+
+def test_gps_tracks_latest_sample_and_never_survives_missing_fix(tmp_path):
+    database = DatabaseManager(str(tmp_path / 'wifi.db'))
+    map_id = database.register_map(load_map(str(write_map(tmp_path))))
+    def store(visit, **gps):
+        database.upsert_passive(map_id, 0, 0, .125, .125, visit,
+                                {'signal_dbm': -60., **gps})
+        return database.get_cells(map_id)[0]
+    assert store('a', latitude=1., longitude=2., altitude=3.)['altitude'] == 3.
+    assert store('a', latitude=4., longitude=5., altitude=6.)['latitude'] == 4.
+    assert store('a')['latitude'] is None
+    store('a', latitude=7.)
+    assert store('b')['latitude'] is None
+    database.close()
+
+
+def test_new_database_contains_gps_columns_and_reopens_without_data_loss(tmp_path):
+    from wifi_logger_visualizer.gps_data import GPS_COLUMNS
+    path = str(tmp_path / 'wifi.db')
+    database = DatabaseManager(path)
+    map_id = database.register_map(load_map(str(write_map(tmp_path))))
+    database.upsert_passive(map_id, 0, 0, .125, .125, 'a', {'signal_dbm': -55.})
+    columns = {row[1]: row[2] for row in database.conn.execute('PRAGMA table_info(wifi_cells)')}
+    assert all(columns[name] == sql_type for name, sql_type in GPS_COLUMNS.items())
+    database.close()
+    # The viewer can read a newly created database without writing to it.
+    reader = DatabaseManager(path, read_only=True)
+    assert reader.get_cells(map_id)[0]['signal_dbm_last'] == -55.
+    reader.close()
+    for _ in range(2):
+        database = DatabaseManager(path)
+        row = database.get_cells(map_id)[0]
+        assert row['signal_dbm_last'] == -55.
+        assert all(row[column] is None for column in GPS_COLUMNS)
+        database.close()

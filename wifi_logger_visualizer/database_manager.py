@@ -3,6 +3,8 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Dict, Iterable, Optional
 
+from wifi_logger_visualizer.gps_data import GPS_COLUMNS
+
 
 PASSIVE_FIELDS = (
     "signal_dbm",
@@ -75,6 +77,15 @@ class DatabaseManager:
                 ssid TEXT,
                 bssid TEXT,
                 frequency_mhz REAL,
+                latitude REAL,
+                longitude REAL,
+                altitude REAL,
+                gps_stamp_ns INTEGER,
+                gps_frame_id TEXT,
+                gps_status INTEGER,
+                gps_service INTEGER,
+                gps_covariance TEXT,
+                gps_covariance_type INTEGER,
                 signal_dbm_min REAL,
                 signal_dbm_max REAL,
                 signal_dbm_last REAL,
@@ -229,6 +240,10 @@ class DatabaseManager:
             present = [value for value in (previous_max, current) if value is not None]
             values[f"{field}_max"] = max(present) if present else None
             values[f"{field}_last"] = current
+
+        # GPS describes the latest observation, not the whole visit window.
+        # Explicit NULLs prevent a stale/disabled fix surviving a new sample.
+        values.update({name: sample.get(name) for name in GPS_COLUMNS})
 
         columns = list(values)
         placeholders = ", ".join(f":{column}" for column in columns)

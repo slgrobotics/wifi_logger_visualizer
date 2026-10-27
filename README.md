@@ -69,6 +69,41 @@ ros2 launch wifi_logger_visualizer wifi_logger_visualizer.launch.py \
   monitoring:=true survey:=false visualization:=true
 ```
 
+## Optional GPS metadata
+
+Set these startup parameters in the `/wifi_logger_node` YAML section:
+
+```yaml
+use_gps: true
+gps_topic: "/gps/filtered"
+gps_max_age: 2.0
+```
+
+GPS defaults to disabled, with no `NavSatFix` subscription. When enabled,
+the passive logger associates the latest valid fix with each Wi-Fi observation.
+Fix status 0 (ordinary fix) is accepted, along with augmented fixes. Source
+timestamps must be nonzero, not in the future, and within `gps_max_age` seconds
+of the logger's ROS clock; the publisher must use the same clock.
+
+The nullable `wifi_cells` columns `latitude`, `longitude`, and `altitude`
+describe the **latest passive observation**, not averages over a visit.
+Latitude/longitude are degrees; altitude is meters above the WGS 84 ellipsoid,
+as supplied by ROS, with no rounding or geoid conversion. Unavailable altitude
+is NULL independently of valid horizontal coordinates. Provenance is stored in
+`gps_stamp_ns` (source ROS timestamp), `gps_frame_id`, `gps_status`,
+`gps_service`, `gps_covariance` (JSON row-major ENU matrix in square meters),
+and `gps_covariance_type`. Unknown or invalid covariance is NULL with type 0.
+Coordinates remain at the antenna frame; no antenna offset is applied.
+
+Each passive update replaces this metadata, even within one visit. Missing,
+invalid, stale, or disabled GPS clears it to NULL without stopping Wi-Fi
+collection. Map localization is still required; GPS does not define cell
+geometry or replace TF. Cell keys remain two-dimensional. Missing databases
+are created with the GPS columns; existing schemas are not migrated. Recreate
+an older database to use GPS collection. Survey results retain their own
+timestamps and do not claim a separately measured GPS fix. GPS rendering and
+V1 database import are outside this change.
+
 ## Explicit surveys
 
 Survey mode waits until the robot has remained within 4 cm for three seconds,
