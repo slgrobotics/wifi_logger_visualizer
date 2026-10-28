@@ -9,9 +9,9 @@ import socket
 import subprocess
 from typing import Any, Dict, Optional, Tuple
 
-import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
+from wifi_logger_visualizer.ros_runtime import run_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import Bool, String
@@ -326,13 +326,7 @@ class WifiSurveyNode(Node):
 
 
 def main(args=None) -> None:
-    rclpy.init(args=args)
-    node = WifiSurveyNode()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    run_node(WifiSurveyNode, args=args)
 
 
 if __name__ == "__main__":

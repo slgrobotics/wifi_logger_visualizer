@@ -5,8 +5,8 @@ import hashlib
 from typing import Any, Dict, Optional, Tuple
 
 from geometry_msgs.msg import Point
-import rclpy
 from rclpy.node import Node
+from wifi_logger_visualizer.ros_runtime import run_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
@@ -227,13 +227,7 @@ class WifiVisualizerNode(Node):
 
 
 def main(args=None) -> None:
-    rclpy.init(args=args)
-    node = WifiVisualizerNode()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    run_node(WifiVisualizerNode, args=args)
 
 
 if __name__ == "__main__":

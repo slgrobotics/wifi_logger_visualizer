@@ -5,9 +5,9 @@ import subprocess
 from typing import Optional, Tuple
 import uuid
 
-import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
+from wifi_logger_visualizer.ros_runtime import run_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
@@ -187,13 +187,7 @@ class WifiDataCollector(Node):
 
 
 def main(args=None) -> None:
-    rclpy.init(args=args)
-    node = WifiDataCollector()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    run_node(WifiDataCollector, args=args)
 
 
 if __name__ == "__main__":

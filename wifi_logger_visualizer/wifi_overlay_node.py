@@ -4,8 +4,8 @@ import html
 import json
 import math
 
-import rclpy
 from rclpy.node import Node
+from wifi_logger_visualizer.ros_runtime import run_node
 from rviz_2d_overlay_msgs.msg import OverlayText
 from std_msgs.msg import ColorRGBA, String
 
@@ -83,13 +83,7 @@ class WifiOverlayNode(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = WifiOverlayNode()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    run_node(WifiOverlayNode, args=args)
 
 
 if __name__ == "__main__":
