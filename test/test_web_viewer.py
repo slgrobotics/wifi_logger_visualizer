@@ -176,3 +176,32 @@ def test_gps_display_is_opt_in():
     from wifi_logger_visualizer.web_viewer import rendered_html
     assert 'const useGps=false;' in rendered_html({})
     assert 'const useGps=true;' in rendered_html({}, use_gps=True)
+
+
+def test_api_includes_saved_orientation(tmp_path):
+    import json
+    from wifi_logger_visualizer.map_data import load_map
+    import yaml
+    path = tmp_path / 'map.yaml'
+    (tmp_path / 'map.pgm').write_bytes(b'P5\n1 1\n255\n\xff')
+    path.write_text('image: map.pgm\nresolution: 0.25\norigin: [0, 0, 0]\n')
+    captured = load_map(str(path))
+    path.with_suffix('.orientation.yaml').write_text(yaml.safe_dump(dict(
+        schema_version=1, map_content_hash=captured['content_hash'],
+        orientation=dict(valid=True, reference='true_north',
+                         map_x_heading_from_east_deg=30., uncertainty_deg=2.))))
+    handler = object.__new__(ViewerHandler)
+    handler.path = '/api/data'
+    handler.db_path = str(tmp_path / 'wifi.db')
+    handler._map_id = Mock(return_value=1)
+    handler._send = Mock()
+    database = Mock()
+    database.get_map.return_value = captured
+    database.list_maps.return_value = []
+    database.get_surveys.return_value = []
+    database.get_cells.return_value = []
+    with patch('wifi_logger_visualizer.web_viewer.DatabaseManager', return_value=database):
+        handler._handle_get()
+    response = json.loads(handler._send.call_args.args[0])
+    assert response['orientation']['valid']
+    assert response['orientation']['north_rotation_in_image_deg'] == 30.

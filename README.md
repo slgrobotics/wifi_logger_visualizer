@@ -190,6 +190,26 @@ It reads `db_path` and `cell_size` from the common `/**` parameters, and `host`,
 and optional `node_names` from `/**/wifi_web_viewer`.
 Explicit launch arguments (`db`, `host`, `port`, `cell_size`, `node_names`) override the YAML settings.
 
+### Saved map orientation
+
+The browser displays a true-North compass and the saved map heading/uncertainty
+when a matching `<map>.orientation.yaml` sidecar is available. This is independent
+of `use_gps`: indoor maps can also have saved orientation. The compass accounts
+for the raster origin yaw and is included in exported PNGs.
+
+Save the raster and sidecar with the `map_orientation_saver` package. The viewer
+looks beside the original map YAML path recorded in the database. For an offline
+database copy, place the same sidecar basename next to the SQLite file instead.
+No database schema change is required. The sidecar is checked again on Refresh,
+so it can be added after the map was captured in the database.
+
+Only schema-version-1, valid true-North estimates whose map-content hash matches
+the captured YAML/image are shown. Missing, unreadable, invalid, or mismatched
+metadata is displayed as unavailable; the viewer never assumes North is up.
+The saved estimate is static metadata and is not rejected just because its
+timestamp is old. If map files are overwritten, the sidecar must still match
+the particular map snapshot selected in the database.
+
 ### Access point names
 
 The viewer maps known mesh BSSIDs to friendly room names in the legend and the

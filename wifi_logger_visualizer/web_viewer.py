@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 from wifi_logger_visualizer.database_manager import DatabaseManager
 from wifi_logger_visualizer.map_data import decode_pgm, free_cell_centers
+from wifi_logger_visualizer.orientation_data import load_saved_orientation
 import yaml
 
 
@@ -40,6 +41,12 @@ h2 { margin:0; font-size:1.2rem; font-weight:600; }
  background:rgba(32,33,36,.9); border:1px solid #555; border-radius:.5rem;
  box-shadow:0 2px 10px #0005; font-size:.85rem; overflow-wrap:anywhere; }
 #legendTitle { font-weight:bold; margin-bottom:.75rem; }
+#compass { position:absolute; left:.75rem; top:.75rem; max-width:min(15rem,45%);
+ padding:.5rem .65rem; background:rgba(32,33,36,.9); border:1px solid #555;
+ border-radius:.5rem; font-size:.75rem; overflow-wrap:anywhere; }
+#compassRose { display:none; width:100px; height:100px; margin:auto; }
+#compassTitle { font-weight:600; text-align:center; }
+#compassDetails { margin-top:.3rem; }
 .legendScale { display:flex; gap:.5rem; height:15rem; }
 .legendBar { width:1.5rem; border:1px solid #aaa; }
 .legendLabels { display:flex; flex-direction:column; justify-content:space-between; }
@@ -72,6 +79,9 @@ button:hover { background:#45464a; }
 <label><input id="unmeasured" type="checkbox"> Highlight unmeasured free cells</label>
 <button id="refresh">Refresh</button><button id="export">Export PNG</button></div>
 <div id="content"><div id="viewport"><div id="wrap"><img id="map" alt="Wi-Fi coverage map"><canvas id="overlay"></canvas></div></div>
+<div id="compass"><div id="compassTitle">Saved orientation unavailable</div>
+<canvas id="compassRose" width="120" height="120" role="img" aria-label="Saved true North direction"></canvas>
+<div id="compassDetails" role="status"></div></div>
 <div id="legend"><div id="legendTitle"></div><div id="legendBody"></div></div></div>
 <div id="loadStatus" role="status"></div><div id="tip">Hover over a measured cell to see its Wi-Fi details.</div>
 <script>
@@ -135,6 +145,39 @@ function valueFor(cell,metric){
 }
 function pixel(x,y){const m=payload.map; return [(x-m.origin_x)/m.resolution,
  m.height-(y-m.origin_y)/m.resolution];}
+function drawCompass(context,x,y,size,rotation){
+ context.save();context.translate(x+size/2,y+size/2);context.scale(size/120,size/120);
+ context.fillStyle='rgba(32,33,36,.9)';context.fillRect(-60,-60,120,120);
+ context.strokeStyle='#aaa';context.lineWidth=1;context.beginPath();
+ context.arc(0,0,34,0,Math.PI*2);context.stroke();
+ const angle=rotation*Math.PI/180;
+ context.save();context.rotate(angle);context.strokeStyle='#ff7777';context.lineWidth=3;
+ context.beginPath();context.moveTo(0,22);context.lineTo(0,-26);context.stroke();
+ context.fillStyle='#ff7777';context.beginPath();context.moveTo(0,-33);
+ context.lineTo(-7,-19);context.lineTo(7,-19);context.closePath();context.fill();context.restore();
+ context.font='bold 14px system-ui,sans-serif';context.textAlign='center';context.textBaseline='middle';
+ for(const [label,offset] of [['N',-Math.PI/2],['E',0],['S',Math.PI/2],['W',Math.PI]]){
+  context.fillStyle=label==='N'?'#ff9999':'#eee';
+  context.fillText(label,Math.cos(angle+offset)*47,Math.sin(angle+offset)*47);
+ }
+ context.restore();
+}
+function drawOrientation(){
+ const orientation=payload.orientation;
+ const rose=document.getElementById('compassRose'),title=document.getElementById('compassTitle');
+ const details=document.getElementById('compassDetails');
+ const available=orientation?.valid===true;
+ rose.style.display=available?'block':'none';
+ title.textContent=available?'True North (saved)':'Saved orientation unavailable';
+ document.getElementById('compass').title=available&&orientation.saved_at?
+  'Map saved: '+orientation.saved_at:'';
+ if(!available){details.textContent=orientation?.reason||'No saved orientation';return;}
+ drawCompass(rose.getContext('2d'),0,0,120,orientation.north_rotation_in_image_deg);
+ const uncertainty=typeof orientation.uncertainty_deg==='number'?
+  ` · ±${orientation.uncertainty_deg.toFixed(1)}°`:' · Uncertainty unavailable';
+ const heading=orientation.map_x_heading_from_east_deg;
+ details.textContent=`Map +X: ${(Math.abs(heading)<.05?0:heading).toFixed(1)}° from East${uncertainty}`;
+}
 function drawLegend(metric){
  const title=document.getElementById('legendTitle');
  const body=document.getElementById('legendBody');title.textContent=titles[metric];
@@ -182,6 +225,7 @@ function draw(){
  c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');
  x.clearRect(0,0,c.width,c.height);drawn=[];
  const metric=document.getElementById('metric').value;
+ drawOrientation();
  drawLegend(metric);
  const size=payload.cell_size/payload.map.resolution;
  const measured=new Set(payload.cells.map(v=>v.cell_x+','+v.cell_y));
@@ -243,6 +287,10 @@ document.getElementById('export').onclick=()=>{
  const output=document.createElement('canvas');output.width=overlay.width;
  output.height=overlay.height;const context=output.getContext('2d');
  context.drawImage(image,0,0);context.drawImage(overlay,0,0);
+ if(payload?.orientation?.valid){
+  const size=Math.min(120,output.width/3,output.height/3);
+  drawCompass(context,4,4,size,payload.orientation.north_rotation_in_image_deg);
+ }
  const link=document.createElement('a');link.download=__MAP_DOWNLOAD_NAME__;
  link.href=output.toDataURL('image/png');link.click();};
 document.getElementById('overlay').onmousemove=e=>{const r=e.target.getBoundingClientRect();
@@ -393,6 +441,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     {
                         "maps": database.list_maps(),
                         "map": public_map,
+                        "orientation": load_saved_orientation(map_data, self.db_path),
                         "cell_size": self.cell_size,
                         "cells": cells,
                         "surveys": database.get_surveys(map_id),
