@@ -63,6 +63,17 @@ The logger uses `iw`, not deprecated `iwconfig`, to capture:
 It looks up `map -> base_link` directly and stops recording while
 `/localization/recovery_active` is true or the transform is stale.
 
+The V2 suite launch waits normally if its configured saved map does not exist
+yet. It checks the YAML and complete PGM image every five seconds without
+blocking localization or mapping. Once both are readable, enabled Wi-Fi
+services start automatically; no launch restart is needed. Override the interval
+with `map_check_interval:=2.0`. A map filename must still be configured so the
+suite knows which save to wait for. An orientation sidecar is optional.
+
+This is an initial startup gate, not continuous map switching: later map changes
+require restarting the suite. Raw node executables expect a readable map when
+started directly; the suite launch handles the waiting for them.
+
 ```bash
 ros2 launch wifi_logger_visualizer wifi_logger_visualizer.launch.py \
   map_yaml_path:=/absolute/path/to/map.yaml \

@@ -2,10 +2,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from wifi_logger_visualizer.map_startup import wait_for_saved_map
 
 
 def generate_launch_description():
@@ -21,15 +22,7 @@ def generate_launch_description():
         "map_yaml_path": LaunchConfiguration("map_yaml_path"),
         "cell_size": LaunchConfiguration("cell_size"),
     }
-    return LaunchDescription([
-        DeclareLaunchArgument("overlay", default_value="true"),
-        DeclareLaunchArgument("monitoring", default_value="true"),
-        DeclareLaunchArgument("survey", default_value="false"),
-        DeclareLaunchArgument("visualization", default_value="true"),
-        DeclareLaunchArgument("db_path", default_value="~/.ros/titania_wifi.db"),
-        DeclareLaunchArgument("map_yaml_path"),
-        DeclareLaunchArgument("cell_size", default_value="0.25"),
-        DeclareLaunchArgument("target_host", default_value="amdc"),
+    nodes = [
         Node(
             package="wifi_logger_visualizer",
             executable="wifi_logger_node.py",
@@ -65,4 +58,28 @@ def generate_launch_description():
             ],
             output="screen",
         ),
+    ]
+
+    def launch_when_ready(context):
+        needs_map = any(IfCondition(LaunchConfiguration(name)).evaluate(context)
+                        for name in ('monitoring', 'survey', 'visualization'))
+        if not needs_map:
+            return nodes
+        return [wait_for_saved_map(
+            LaunchConfiguration('map_yaml_path').perform(context), nodes,
+            LaunchConfiguration('map_check_interval').perform(context),
+        )]
+
+    return LaunchDescription([
+        DeclareLaunchArgument("overlay", default_value="true"),
+        DeclareLaunchArgument("monitoring", default_value="true"),
+        DeclareLaunchArgument("survey", default_value="false"),
+        DeclareLaunchArgument("visualization", default_value="true"),
+        DeclareLaunchArgument("db_path", default_value="~/.ros/titania_wifi.db"),
+        DeclareLaunchArgument("map_yaml_path"),
+        DeclareLaunchArgument("map_check_interval", default_value="5.0",
+                              description="Wall-clock seconds between saved-map readiness checks"),
+        DeclareLaunchArgument("cell_size", default_value="0.25"),
+        DeclareLaunchArgument("target_host", default_value="amdc"),
+        OpaqueFunction(function=launch_when_ready),
     ])
