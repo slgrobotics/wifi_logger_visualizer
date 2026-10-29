@@ -267,7 +267,10 @@ async function loadData(){
   const sel=document.getElementById('mapSelect');
   sel.replaceChildren();
   for(const m of payload.maps){const o=document.createElement('option');o.value=m.id;
-   o.text=`${m.id}: ${m.source_yaml_path} (${m.content_hash.slice(0,8)})`;sel.add(o);}
+   const saved=m.orientation_saved_at ? new Date(m.orientation_saved_at) : null;
+   const savedLabel=saved&&!Number.isNaN(saved.getTime())
+    ? ` — saved ${saved.toLocaleString(undefined,{timeZoneName:'short'})}` : '';
+   o.text=`${m.id}: ${m.source_yaml_path} (${m.content_hash.slice(0,8)})${savedLabel}`;sel.add(o);}
   sel.value=payload.map.id;
   const img=document.getElementById('map');
   img.onload=()=>{fitMap();draw();status.textContent='';};

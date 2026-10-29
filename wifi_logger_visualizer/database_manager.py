@@ -223,7 +223,7 @@ class DatabaseManager:
         rows = self.conn.execute(
             """
             SELECT id, content_hash, captured_at, source_yaml_path,
-                   resolution, width, height
+                   orientation_saved_at, resolution, width, height
             FROM maps ORDER BY captured_at DESC, id DESC
             """
         ).fetchall()
