@@ -1,4 +1,4 @@
-"""Read hash-bound saved map orientation without changing the Wi-Fi database.
+"""Validate saved map orientation and read portable database display fields.
 
 The map snapshot's recorded YAML path identifies its orientation sidecar. For
 portable database copies, the same sidecar basename may instead be placed next
@@ -26,6 +26,8 @@ def _validated_orientation(document, map_data):
     if not isinstance(orientation, dict) or orientation.get('valid') is not True:
         reason = orientation.get('reason') if isinstance(orientation, dict) else None
         return dict(valid=False, reason=reason if isinstance(reason, str) and reason else 'Saved estimate is unavailable')
+    if 'schema_version' in orientation and (type(orientation['schema_version']) is not int or orientation['schema_version'] != 1):
+        return dict(valid=False, reason='Unsupported orientation estimate format')
     if orientation.get('reference') != 'true_north':
         return dict(valid=False, reason='Saved orientation is not referenced to true North')
     heading = orientation.get('map_x_heading_from_east_deg')
@@ -56,10 +58,21 @@ def _validated_orientation(document, map_data):
 def load_saved_orientation(map_data, db_path=None):
     """Return a validated display summary or a nonfatal unavailable reason.
 
-    Read on each refresh, allowing a sidecar saved after database registration
-    to become visible. The captured map hash, not the current on-disk image,
-    determines whether the orientation belongs to the displayed snapshot.
+    Prefer normalized database fields without parsing the source schema. When
+    metadata has never been imported, allow a matching external sidecar. The
+    captured map hash binds that fallback to the displayed snapshot.
     """
+    stored = map_data.get('orientation_valid')
+    if stored is not None:
+        if not stored:
+            return dict(valid=False, reason=map_data.get('orientation_reason') or 'Saved estimate is unavailable')
+        heading = map_data['map_x_heading_from_east_deg']
+        return dict(valid=True, reference='true_north',
+                    map_x_heading_from_east_deg=heading,
+                    north_yaw_in_map_deg=(90. - heading) % 360.,
+                    north_rotation_in_image_deg=(heading + math.degrees(map_data['origin_yaw'])) % 360.,
+                    uncertainty_deg=map_data.get('orientation_uncertainty_deg'),
+                    saved_at=map_data.get('orientation_saved_at') or '', source='')
     source = map_data.get('source_yaml_path')
     if not isinstance(source, str) or not source:
         return dict(valid=False, reason='No saved map path is available')
@@ -82,3 +95,37 @@ def load_saved_orientation(map_data, db_path=None):
         if result['valid']:
             return result
     return result
+
+
+def read_orientation_snapshot(map_data):
+    """Read original YAML and validate its binding before database import.
+
+    Missing files leave existing metadata intact. Unsupported or malformed files
+    can be retained for diagnosis, but never become usable compass estimates.
+    """
+    path = Path(map_data['source_yaml_path']).with_suffix('.orientation.yaml')
+    try:
+        raw = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeError):
+        return None
+    try:
+        document = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        return raw, dict(valid=False, reason='Could not parse the saved orientation file'), None
+    # A sidecar for an overwritten map must not replace captured metadata.
+    if isinstance(document, dict) and document.get('map_content_hash') != map_data['content_hash']:
+        return None
+    result = _validated_orientation(document, map_data)
+    geometry = document.get('geometry') if isinstance(document, dict) else None
+    expected = [map_data['origin_x'], map_data['origin_y'], map_data['origin_yaw']]
+    origin = geometry.get('origin') if isinstance(geometry, dict) else None
+    resolution = geometry.get('resolution') if isinstance(geometry, dict) else None
+    if (not _finite_number(resolution)
+            or not math.isclose(resolution, map_data['resolution'], rel_tol=1e-9, abs_tol=1e-9)
+            or not isinstance(origin, list) or len(origin) != 3
+            or any(not _finite_number(a) or not math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-9)
+                   for a, b in zip(origin or [], expected))):
+        if result['valid']:
+            result = dict(valid=False, reason='Saved orientation geometry does not match this map')
+    saved_at = document.get('saved_at') if isinstance(document, dict) else None
+    return raw, result, str(saved_at) if saved_at is not None else None

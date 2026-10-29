@@ -4,6 +4,7 @@ import sqlite3
 from typing import Any, Dict, Iterable, Optional
 
 from wifi_logger_visualizer.gps_data import GPS_COLUMNS
+from wifi_logger_visualizer.orientation_data import read_orientation_snapshot
 
 
 PASSIVE_FIELDS = (
@@ -59,7 +60,14 @@ class DatabaseManager:
                 height INTEGER NOT NULL,
                 negate INTEGER NOT NULL,
                 occupied_thresh REAL NOT NULL,
-                free_thresh REAL NOT NULL
+                free_thresh REAL NOT NULL,
+                orientation_yaml TEXT,
+                orientation_captured_at TEXT,
+                orientation_valid INTEGER CHECK (orientation_valid IN (0, 1)),
+                orientation_reason TEXT,
+                map_x_heading_from_east_deg REAL,
+                orientation_uncertainty_deg REAL,
+                orientation_saved_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS wifi_cells (
@@ -139,6 +147,7 @@ class DatabaseManager:
             (map_data["content_hash"],),
         ).fetchone()
         if existing:
+            self.refresh_map_orientation(int(existing["id"]), map_data)
             return int(existing["id"])
 
         cursor = self.conn.execute(
@@ -168,7 +177,35 @@ class DatabaseManager:
             ),
         )
         self.conn.commit()
-        return int(cursor.lastrowid)
+        map_id = int(cursor.lastrowid)
+        self.refresh_map_orientation(map_id, map_data)
+        return map_id
+
+    def refresh_map_orientation(self, map_id: int, map_data=None) -> None:
+        """Atomically capture sidecar text and validated display fields.
+
+        Repeated checks avoid writes when unchanged. Missing or mismatched files
+        preserve the last captured snapshot; an invalid replacement cannot erase
+        an already validated orientation.
+        """
+        stored = self.get_map(map_id)
+        if stored is None:
+            return
+        snapshot = read_orientation_snapshot(map_data or stored)
+        if snapshot is None:
+            return
+        raw, result, saved_at = snapshot
+        if raw == stored['orientation_yaml'] or (stored['orientation_valid'] == 1 and not result['valid']):
+            return
+        with self.conn:
+            self.conn.execute(
+                """UPDATE maps SET orientation_yaml=?, orientation_captured_at=?,
+                   orientation_valid=?, orientation_reason=?, map_x_heading_from_east_deg=?,
+                   orientation_uncertainty_deg=?, orientation_saved_at=? WHERE id=?""",
+                (raw, utc_now(), int(result['valid']), result.get('reason', ''),
+                 result.get('map_x_heading_from_east_deg'), result.get('uncertainty_deg'),
+                 saved_at, map_id),
+            )
 
     def get_map(self, map_id: int) -> Optional[Dict[str, Any]]:
         row = self.conn.execute(

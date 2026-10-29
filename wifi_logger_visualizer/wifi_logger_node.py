@@ -2,6 +2,7 @@
 import json
 import math
 import subprocess
+import sqlite3
 from typing import Optional, Tuple
 import uuid
 
@@ -95,10 +96,18 @@ class WifiDataCollector(Node):
             float(self.get_parameter("update_interval").value),
             self._sample,
         )
+        self.create_timer(5.0, self._refresh_map_orientation)
         self.get_logger().info(
             f"Passive Wi-Fi monitoring map_id={self.map_id}, "
             f"interface={self.fetcher.wifi_interface}, cell_size={self.cell_size} m"
         )
+
+    def _refresh_map_orientation(self) -> None:
+        """Import metadata saved after collection began, even without pose data."""
+        try:
+            self.database.refresh_map_orientation(self.map_id)
+        except sqlite3.Error as error:
+            self.get_logger().warning(f"Could not refresh saved map orientation: {error}")
 
     def destroy_node(self) -> None:
         self.database.close()

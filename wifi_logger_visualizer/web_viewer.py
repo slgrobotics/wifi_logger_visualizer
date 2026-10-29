@@ -435,7 +435,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
                         cell["gps_stamp_ns"] = str(cell["gps_stamp_ns"])
                 public_map = {
                     key: value for key, value in map_data.items()
-                    if key not in ("image_data", "yaml_text")
+                    if key not in ("image_data", "yaml_text", "orientation_yaml")
                 }
                 body = json.dumps(
                     {

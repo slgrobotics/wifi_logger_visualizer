@@ -6,6 +6,7 @@ import json
 import math
 import re
 import socket
+import sqlite3
 import subprocess
 from typing import Any, Dict, Optional, Tuple
 
@@ -225,6 +226,7 @@ class WifiSurveyNode(Node):
         self.future: Optional[Future] = None
         self.pending_cell: Optional[Tuple[int, int]] = None
         self.create_timer(0.5, self._tick)
+        self.create_timer(5.0, self._refresh_map_orientation)
         self.get_logger().info(
             f"Wi-Fi survey mode targets {self.target_host}; tests begin only "
             f"after {self.stationary_seconds:.1f}s stationary"
@@ -264,6 +266,18 @@ class WifiSurveyNode(Node):
             math.hypot(x - first_x, y - first_y) <= self.stationary_tolerance
             for _, x, y in self.positions
         )
+
+    def _refresh_map_orientation(self) -> None:
+        """Capture late sidecars when this node runs without a passive logger."""
+        database = None
+        try:
+            database = DatabaseManager(self.db_path)
+            database.refresh_map_orientation(self.map_id)
+        except sqlite3.Error as error:
+            self.get_logger().warning(f"Could not refresh saved map orientation: {error}")
+        finally:
+            if database is not None:
+                database.close()
 
     def _tick(self) -> None:
         if self.future is not None and self.future.done():

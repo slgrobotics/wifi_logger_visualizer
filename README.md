@@ -208,11 +208,19 @@ when a matching `<map>.orientation.yaml` sidecar is available. This is independe
 of `use_gps`: indoor maps can also have saved orientation. The compass accounts
 for the raster origin yaw and is included in exported PNGs.
 
-Save the raster and sidecar with the `map_orientation_saver` package. The viewer
-looks beside the original map YAML path recorded in the database. For an offline
-database copy, place the same sidecar basename next to the SQLite file instead.
-No database schema change is required. The sidecar is checked again on Refresh,
-so it can be added after the map was captured in the database.
+Save the raster and sidecar with the `map_orientation_saver` package. Collection
+captures the complete original sidecar YAML in the map's database row, together
+with its import time, saved time, validated status/reason, true-ENU heading and
+optional uncertainty. The importer verifies the schema, map hash and geometry.
+The passive collector and survey node check every five seconds for a sidecar
+saved later.
+Missing or mismatched files preserve previously captured metadata. Invalid
+replacements also preserve an already validated snapshot.
+
+The viewer uses normalized database fields, so copied databases retain their
+orientation without external files. For maps with no imported metadata, it can
+still read a sidecar beside the original map YAML or beside the database.
+This schema applies to newly created databases; there is no migration logic.
 
 Only schema-version-1, valid true-North estimates whose map-content hash matches
 the captured YAML/image are shown. Missing, unreadable, invalid, or mismatched
