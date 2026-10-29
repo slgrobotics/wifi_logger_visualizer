@@ -29,7 +29,7 @@ body { font-family:system-ui,sans-serif; margin:0; padding:1rem;
 h2 { margin:0; font-size:1.2rem; font-weight:600; }
 #toolbar { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; flex-shrink:0; }
 #toolbar label { display:flex; align-items:center; gap:.4rem; min-width:0; }
-#mapSelect { max-width:min(32rem,65vw); }
+#mapSelect { max-width:calc(100vw - 6rem); }
 #content { position:relative; flex:1; min-height:0; min-width:0;
  background:#151618; border:1px solid #444; border-radius:.6rem; overflow:hidden; }
 #viewport { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
@@ -268,9 +268,11 @@ async function loadData(){
   sel.replaceChildren();
   for(const m of payload.maps){const o=document.createElement('option');o.value=m.id;
    const saved=m.orientation_saved_at ? new Date(m.orientation_saved_at) : null;
-   const savedLabel=saved&&!Number.isNaN(saved.getTime())
-    ? ` — saved ${saved.toLocaleString(undefined,{timeZoneName:'short'})}` : '';
-   o.text=`${m.id}: ${m.source_yaml_path} (${m.content_hash.slice(0,8)})${savedLabel}`;sel.add(o);}
+   const hasSaved=saved&&!Number.isNaN(saved.getTime());
+   const timestamp=hasSaved ? saved : (m.captured_at ? new Date(m.captured_at) : null);
+   const timeLabel=timestamp&&!Number.isNaN(timestamp.getTime())
+    ? ` — ${hasSaved ? 'saved' : 'captured'} ${timestamp.toLocaleString(undefined,{timeZoneName:'short'})}` : '';
+   o.text=`${m.id}: ${m.source_yaml_path} (${m.content_hash.slice(0,8)})${timeLabel}`;sel.add(o);}
   sel.value=payload.map.id;
   const img=document.getElementById('map');
   img.onload=()=>{fitMap();draw();status.textContent='';};
